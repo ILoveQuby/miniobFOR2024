@@ -509,7 +509,7 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
            "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
            name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
   }
-  // record_handler_->delete_record(&record.rid());
+  record_handler_->delete_record(&record.rid());
   for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
     const FieldMeta *cur_field = table_meta_.field(i);
     if (strcmp(fields.name(), cur_field->name()) == 0) {
@@ -523,7 +523,7 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
            "failed to insert entry into index. table name=%s, index name=%s, rid=%s, rc=%s",
            name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
   }
-  // rc = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
+  rc = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
   return rc;
 }
 

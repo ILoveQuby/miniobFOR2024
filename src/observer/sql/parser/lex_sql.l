@@ -119,6 +119,7 @@ GROUP                                   RETURN_TOKEN(GROUP);
 BY                                      RETURN_TOKEN(BY);
 STORAGE                                 RETURN_TOKEN(STORAGE);
 FORMAT                                  RETURN_TOKEN(FORMAT);
+NOT{WHITE_SAPCE}+LIKE                   RETURN_TOKEN(NOT_LIKE);
 LIKE                                    RETURN_TOKEN(LIKE);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);

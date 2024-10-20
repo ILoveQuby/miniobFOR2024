@@ -145,6 +145,9 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     case LIKE_OP: {
       result = (left.compare_like(right) == 1);
     } break;
+    case NOT_LIKE_OP: {
+      result = (left.compare_like(right) == 0);
+    } break;
     default: {
       LOG_WARN("unsupported comparison. %d", comp_);
       rc = RC::INTERNAL;

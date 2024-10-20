@@ -136,7 +136,8 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     right_value.set_value(right_.value);
   }
 
-  int cmp_result = left_value.compare(right_value);
+  int cmp_result  = left_value.compare(right_value);
+  int like_result = left_value.compare_like(right_value);
 
   switch (comp_op_) {
     case EQUAL_TO: return 0 == cmp_result;
@@ -145,7 +146,7 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     case LESS_THAN: return cmp_result < 0;
     case GREAT_EQUAL: return cmp_result >= 0;
     case GREAT_THAN: return cmp_result > 0;
-
+    case LIKE_OP: return like_result == 1;
     default: break;
   }
 

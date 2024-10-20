@@ -48,6 +48,13 @@ public:
   virtual int compare(const Value &left, const Value &right) const { return INT32_MAX; }
 
   /**
+   * @return
+   *  0 表示 left not like right
+   *  1 表示 left like right
+   *  INT32_MAX 表示未实现的比较
+   */
+  virtual int compare_like(const Value &left, const Value &right) const { return INT32_MAX; }
+  /**
    * @brief 计算 left + right，并将结果保存到 result 中
    */
   virtual RC add(const Value &left, const Value &right, Value &result) const { return RC::UNSUPPORTED; }

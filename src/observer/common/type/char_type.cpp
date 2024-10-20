@@ -21,6 +21,44 @@ int CharType::compare(const Value &left, const Value &right) const
       (void *)left.value_.pointer_value_, left.length_, (void *)right.value_.pointer_value_, right.length_);
 }
 
+int CharType::compare_like(const Value &left, const Value &right) const
+{
+  ASSERT(left.attr_type() == AttrType::CHARS && right.attr_type() == AttrType::CHARS, "invalid type");
+  auto match = [](const char *str, const char *pattern) -> int {
+    const char *s     = str;
+    const char *p     = pattern;
+    const char *star  = nullptr;  // 记录上一个星号的位置
+    const char *match = nullptr;  // 记录当前匹配的字符串位置
+    while (*s) {
+      // 如果当前字符匹配或者模式字符是 `_`
+      if (*p == *s || *p == '_') {
+        s++;
+        p++;
+      }
+      // 如果模式字符是 `%`
+      else if (*p == '%') {
+        star  = p++;  // 记录 `%` 的位置
+        match = s;    // 记录当前字符串位置
+      }
+      // 不匹配
+      else if (star) {
+        p = star + 1;  // 回到 `%` 的下一个字符
+        s = ++match;   // 从下一个字符开始匹配
+      }
+      // 都不匹配
+      else {
+        return false;
+      }
+    }
+    // 检查模式串是否处理完
+    while (*p == '%') {
+      p++;  // 跳过多余的 `%`
+    }
+    return *p == '\0';  // 模式串是否完全匹配
+  };
+  return match(left.value_.pointer_value_, right.value_.pointer_value_);
+}
+
 RC CharType::set_value_from_str(Value &val, const string &data) const
 {
   val.set_string(data.c_str());

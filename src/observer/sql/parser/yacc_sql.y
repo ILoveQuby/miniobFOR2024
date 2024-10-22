@@ -412,15 +412,8 @@ value:
       std::string str(tmp);
       Value *value = new Value();
       int date;
-      if(common::string_to_date(str, date) < 0)
-      {
-        yyerror(&@$,sql_string,sql_result,scanner,"date invaid");
-        YYERROR;
-      }
-      else
-      {
-        value->set_date(date);
-      }
+      common::string_to_date(str, date);
+      value->set_date(date);
       $$ = value;
       free(tmp);
       free($1);
@@ -538,7 +531,8 @@ expression:
       $$->set_name(token_name(sql_string, &@$));
     }
     | '-' expression %prec UMINUS {
-      $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
+      ValueExpr *val = new ValueExpr(Value(-1));
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::MUL, $2, val, sql_string, &@$);
     }
     | value {
       $$ = new ValueExpr(*$1);

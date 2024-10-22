@@ -8,6 +8,7 @@
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
+#include "common/time/datetime.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/parser/yacc_sql.hpp"
 #include "sql/parser/lex_sql.h"
@@ -139,6 +140,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %token <floats> FLOAT
 %token <string> ID
 %token <string> SSS
+%token <string> DATE_STR
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
@@ -405,6 +407,24 @@ value:
       $$ = new Value((float)$1);
       @$ = @1;
     }
+    | DATE_STR {
+      char *tmp = common::substr($1,1,strlen($1)-2);
+      std::string str(tmp);
+      Value *value = new Value();
+      int date;
+      if(common::string_to_date(str, date) < 0)
+      {
+        yyerror(&@$,sql_string,sql_result,scanner,"date invaid");
+        YYERROR;
+      }
+      else
+      {
+        value->set_date(date);
+      }
+      $$ = value;
+      free(tmp);
+      free($1);
+    }
     |SSS {
       char *tmp = common::substr($1,1,strlen($1)-2);
       $$ = new Value(tmp);
@@ -532,6 +552,16 @@ expression:
       $$ = tmp;
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
+    }
+    | expression value {
+      if(!$2->is_minus())
+      {
+        yyerror(&@$, sql_string, sql_result, scanner, "error");
+        YYERROR;
+      }
+      ValueExpr *val = new ValueExpr(*$2);
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, val, sql_string, &@$);
+      delete $2;
     }
     | '*' {
       $$ = new StarExpr();

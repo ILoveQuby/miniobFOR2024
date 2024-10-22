@@ -448,4 +448,15 @@ bool check_date(int y, int m, int d)
   return y > 0 && y <= 9999 && m > 0 && m <= 12 && d > 0 && (d <= ((m == 2 && leap) ? 1 : 0) + mon[m]);
 }
 
+int string_to_date(const std::string &str, int32_t &date)
+{
+  int y, m, d;
+  sscanf(str.c_str(), "%d-%d-%d", &y, &m, &d);  // not check return value eq 3, lex guarantee
+  bool b = check_date(y, m, d);
+  if (!b)
+    return -1;
+  date = y * 10000 + m * 100 + d;
+  return 0;
+}
+
 }  // namespace common

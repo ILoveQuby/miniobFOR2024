@@ -433,4 +433,6 @@ public:
 
 bool check_date(int y, int m, int d);
 
+int string_to_date(const std::string &str, int32_t &date);
+
 }  // namespace common

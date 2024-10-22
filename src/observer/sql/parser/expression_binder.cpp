@@ -181,7 +181,46 @@ RC ExpressionBinder::bind_unbound_field_expression(
 RC ExpressionBinder::bind_field_expression(
     unique_ptr<Expression> &field_expr, vector<unique_ptr<Expression>> &bound_expressions)
 {
-  bound_expressions.emplace_back(std::move(field_expr));
+  if (nullptr == field_expr) {
+    return RC::SUCCESS;
+  }
+
+  auto unbound_field_expr = static_cast<FieldExpr *>(field_expr.get());
+
+  const char *table_name = unbound_field_expr->get_table_name().c_str();
+  const char *field_name = unbound_field_expr->get_field_name().c_str();
+
+  Table *table = nullptr;
+  if (is_blank(table_name)) {
+    if (context_.query_tables().size() != 1) {
+      LOG_INFO("cannot determine table for field: %s", field_name);
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+
+    table = context_.query_tables()[0];
+  } else {
+    table = context_.find_table(table_name);
+    if (nullptr == table) {
+      LOG_INFO("no such table in from list: %s", table_name);
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+  }
+
+  if (0 == strcmp(field_name, "*")) {
+    wildcard_fields(table, bound_expressions);
+  } else {
+    const FieldMeta *field_meta = table->table_meta().field(field_name);
+    if (nullptr == field_meta) {
+      LOG_INFO("no such field in table: %s.%s", table_name, field_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+
+    Field      field(table, field_meta);
+    FieldExpr *field_expr = new FieldExpr(field);
+    field_expr->set_name(field_name);
+    bound_expressions.emplace_back(field_expr);
+  }
+
   return RC::SUCCESS;
 }
 
@@ -386,7 +425,7 @@ RC check_aggregate_expression(AggregateExpr &expression)
   }
 
   // 子表达式中不能再包含聚合表达式
-  function<RC(std::unique_ptr<Expression>&)> check_aggregate_expr = [&](unique_ptr<Expression> &expr) -> RC {
+  function<RC(std::unique_ptr<Expression> &)> check_aggregate_expr = [&](unique_ptr<Expression> &expr) -> RC {
     RC rc = RC::SUCCESS;
     if (expr->type() == ExprType::AGGREGATION) {
       LOG_WARN("aggregate expression cannot be nested");
@@ -408,10 +447,10 @@ RC ExpressionBinder::bind_aggregate_expression(
     return RC::SUCCESS;
   }
 
-  auto unbound_aggregate_expr = static_cast<UnboundAggregateExpr *>(expr.get());
-  const char *aggregate_name = unbound_aggregate_expr->aggregate_name();
+  auto                unbound_aggregate_expr = static_cast<UnboundAggregateExpr *>(expr.get());
+  const char         *aggregate_name         = unbound_aggregate_expr->aggregate_name();
   AggregateExpr::Type aggregate_type;
-  RC rc = AggregateExpr::type_from_string(aggregate_name, aggregate_type);
+  RC                  rc = AggregateExpr::type_from_string(aggregate_name, aggregate_type);
   if (OB_FAIL(rc)) {
     LOG_WARN("invalid aggregate name: %s", aggregate_name);
     return rc;

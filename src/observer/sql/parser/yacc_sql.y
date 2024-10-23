@@ -21,12 +21,13 @@ string token_name(const char *sql_string, YYLTYPE *llocp)
   return string(sql_string + llocp->first_column, llocp->last_column - llocp->first_column + 1);
 }
 
-int yyerror(YYLTYPE *llocp, const char *sql_string, ParsedSqlResult *sql_result, yyscan_t scanner, const char *msg)
+int yyerror(YYLTYPE *llocp, const char *sql_string, ParsedSqlResult *sql_result, yyscan_t scanner, const char *msg, bool is_date = false)
 {
   std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(SCF_ERROR);
   error_sql_node->error.error_msg = msg;
   error_sql_node->error.line = llocp->first_line;
   error_sql_node->error.column = llocp->first_column;
+  error_sql_node->error.is_date = is_date;
   sql_result->add_sql_node(std::move(error_sql_node));
   return 0;
 }
@@ -412,7 +413,13 @@ value:
       std::string str(tmp);
       Value *value = new Value();
       int date;
-      common::string_to_date(str, date);
+      if(common::string_to_date(str, date) < 0)
+      {
+        free(tmp);
+        free($1);
+        yyerror(&@$, sql_string, sql_result, scanner, "error", true);
+        YYERROR;
+      }
       value->set_date(date);
       $$ = value;
       free(tmp);
@@ -550,7 +557,7 @@ expression:
     | expression value {
       if(!$2->is_minus())
       {
-        yyerror(&@$, sql_string, sql_result, scanner, "error");
+        yyerror(&@$, sql_string, sql_result, scanner, "error", false);
         YYERROR;
       }
       ValueExpr *val = new ValueExpr(*$2);

@@ -298,15 +298,6 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value     &value = values[i];
-    if (field->type() == AttrType::DATES) {
-      string date = value.to_string();
-      int    val;
-      common::string_to_date(date, val);
-      if (val < 0) {
-        free(record_data);
-        return RC::INVALID_ARGUMENT;
-      }
-    }
     if (field->type() != value.attr_type()) {
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);

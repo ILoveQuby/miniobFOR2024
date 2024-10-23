@@ -334,6 +334,10 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
   RC rc = RC::SUCCESS;
 
   const AttrType target_type = value_type();
+  if (target_type == AttrType::NULLS || left_value.is_null() || right_value.is_null()) {
+    value.set_null();
+    return rc;
+  }
   value.set_type(target_type);
 
   switch (arithmetic_type_) {

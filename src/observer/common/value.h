@@ -119,7 +119,7 @@ public:
     }
   }
 
-  void set_null() { set_int(0); }
+  void set_null() { this->attr_type_ = AttrType::NULLS; }
   bool is_null() const { return this->attr_type_ == AttrType::NULLS; }
 
 public:

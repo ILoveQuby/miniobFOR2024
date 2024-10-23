@@ -27,17 +27,17 @@ int FloatType::compare(const Value &left, const Value &right) const
 
 RC FloatType::add(const Value &left, const Value &right, Value &result) const
 {
-  result.set_float(left.get_float() + right.get_float());
+  result.set_float(static_cast<int>((left.get_float() + right.get_float()) * 100) / 100.0f);
   return RC::SUCCESS;
 }
 RC FloatType::subtract(const Value &left, const Value &right, Value &result) const
 {
-  result.set_float(left.get_float() - right.get_float());
+  result.set_float(static_cast<int>((left.get_float() - right.get_float()) * 100) / 100.0f);
   return RC::SUCCESS;
 }
 RC FloatType::multiply(const Value &left, const Value &right, Value &result) const
 {
-  result.set_float(left.get_float() * right.get_float());
+  result.set_float(static_cast<int>((left.get_float() * right.get_float()) * 100) / 100.0f);
   return RC::SUCCESS;
 }
 

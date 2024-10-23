@@ -14,7 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/defs.h"
 #include <string.h>
-
+#include <cmath>
 #include "common/lang/algorithm.h"
 
 namespace common {
@@ -36,6 +36,8 @@ int compare_float(void *arg1, void *arg2)
 {
   float v1  = *(float *)arg1;
   float v2  = *(float *)arg2;
+  v1        = std::round(v1 * 100) / 100.0f;
+  v2        = std::round(v2 * 100) / 100.0f;
   float cmp = v1 - v2;
   if (cmp > EPSILON) {
     return 1;

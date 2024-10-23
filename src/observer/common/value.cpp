@@ -205,6 +205,9 @@ void Value::set_value(const Value &value)
     case AttrType::DATES: {
       set_date(value.get_int());
     } break;
+    case AttrType::NULLS: {
+      set_null();
+    } break;
     default: {
       ASSERT(false, "got an invalid value type");
     } break;

@@ -119,6 +119,9 @@ public:
     }
   }
 
+  void set_null() { set_int(0); }
+  bool is_null() const { return this->attr_type_ == AttrType::NULLS; }
+
 public:
   /**
    * 获取对应的值

@@ -120,7 +120,11 @@ ComparisonExpr::~ComparisonExpr() {}
 
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
-  RC  rc         = RC::SUCCESS;
+  RC rc = RC::SUCCESS;
+  if (left.is_null() || right.is_null()) {
+    result = false;
+    return rc;
+  }
   int cmp_result = left.compare(right);
   result         = false;
   switch (comp_) {
@@ -313,6 +317,10 @@ AttrType ArithmeticExpr::value_type() const
     return left_->value_type();
   }
 
+  if (left_->value_type() == AttrType::NULLS || right_->value_type() == AttrType::NULLS) {
+    return AttrType::NULLS;
+  }
+
   if (left_->value_type() == AttrType::INTS && right_->value_type() == AttrType::INTS &&
       arithmetic_type_ != Type::DIV) {
     return AttrType::INTS;
@@ -342,7 +350,12 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
     } break;
 
     case Type::DIV: {
-      Value::divide(left_value, right_value, value);
+      if (target_type == AttrType::INTS && right_value.get_int() == 0)
+        value.set_null();
+      if (target_type == AttrType::FLOATS && right_value.get_float() > -1e6 && right_value.get_float() < 1e6)
+        value.set_null();
+      if (!value.is_null())
+        Value::divide(left_value, right_value, value);
     } break;
 
     case Type::NEGATIVE: {

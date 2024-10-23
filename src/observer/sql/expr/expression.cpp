@@ -352,9 +352,9 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
     case Type::DIV: {
       if (target_type == AttrType::INTS && right_value.get_int() == 0)
         value.set_null();
-      if (target_type == AttrType::FLOATS && right_value.get_float() > -1e6 && right_value.get_float() < 1e6)
+      else if (target_type == AttrType::FLOATS && right_value.get_float() > -1e-6 && right_value.get_float() < 1e-6)
         value.set_null();
-      if (!value.is_null())
+      else
         Value::divide(left_value, right_value, value);
     } break;
 

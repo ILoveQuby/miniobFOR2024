@@ -245,13 +245,10 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
   }
 
   rc = RC::SUCCESS;
-  if (sql_result->str_count() == "" || sql_result->str_count()[6] == '*') {
-    if (event->session()->get_execution_mode() == ExecutionMode::CHUNK_ITERATOR &&
-        event->session()->used_chunk_mode()) {
-      rc = write_chunk_result(sql_result);
-    } else {
-      rc = write_tuple_result(sql_result, sql_result->count());
-    }
+  if (event->session()->get_execution_mode() == ExecutionMode::CHUNK_ITERATOR && event->session()->used_chunk_mode()) {
+    rc = write_chunk_result(sql_result);
+  } else {
+    rc = write_tuple_result(sql_result, sql_result->count());
 
     if (OB_FAIL(rc)) {
       return rc;

@@ -51,10 +51,17 @@ public:
   RC next_tuple(Tuple *&tuple);
   RC next_chunk(Chunk &chunk);
 
+  void        set_count(bool count) { count_ = count; }
+  bool        count() const { return count_; }
+  void        set_str_count(const char *str_count) { str_count_ = str_count; }
+  std::string str_count() const { return str_count_; }
+
 private:
   Session                          *session_ = nullptr;  ///< 当前所属会话
   std::unique_ptr<PhysicalOperator> operator_;           ///< 执行计划
   TupleSchema                       tuple_schema_;       ///< 返回的表头信息。可能有也可能没有
   RC                                return_code_ = RC::SUCCESS;
   std::string                       state_string_;
+  bool                              count_ = false;
+  std::string                       str_count_;
 };

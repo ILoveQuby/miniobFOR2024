@@ -116,6 +116,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NE
         LIKE
         NOT_LIKE
+        COUNT
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -540,6 +541,21 @@ expression:
     | '-' expression %prec UMINUS {
       ValueExpr *val = new ValueExpr(Value(-1));
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::MUL, $2, val, sql_string, &@$);
+    }
+    | COUNT LBRACE '*' RBRACE {
+      StarExpr *tmp = new StarExpr();
+      tmp->set_count(true);
+      $$ = tmp;
+      $$->set_name(token_name(sql_string, &@$));
+    }
+    | COUNT LBRACE rel_attr RBRACE {
+      FieldExpr *tmp = new FieldExpr();
+      tmp->set_table_name($3->relation_name);
+      tmp->set_field_name($3->attribute_name);
+      tmp->set_count(true);
+      $$ = tmp;
+      $$->set_name(token_name(sql_string, &@$));
+      delete $3;
     }
     | value {
       $$ = new ValueExpr(*$1);

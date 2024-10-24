@@ -309,7 +309,7 @@ bool ArithmeticExpr::equal(const Expression &other) const
   }
   auto &other_arith_expr = static_cast<const ArithmeticExpr &>(other);
   return arithmetic_type_ == other_arith_expr.arithmetic_type() && left_->equal(*other_arith_expr.left_) &&
-         right_->equal(*other_arith_expr.right_);
+         (right_ == nullptr || right_->equal(*other_arith_expr.right_));
 }
 AttrType ArithmeticExpr::value_type() const
 {
@@ -454,7 +454,8 @@ RC ArithmeticExpr::get_value(const Tuple &tuple, Value &value) const
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     return rc;
   }
-  rc = right_->get_value(tuple, right_value);
+  if (right_)
+    rc = right_->get_value(tuple, right_value);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
     return rc;

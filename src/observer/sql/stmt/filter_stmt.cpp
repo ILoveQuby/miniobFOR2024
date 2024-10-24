@@ -74,12 +74,18 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
   const std::vector<Table *> table_arr;
   rc = condition.left_expr->create_expression(*tables, table_arr, db, left, default_table);
   if (rc != RC::SUCCESS) {
+    delete condition.left_expr;
+    delete condition.right_expr;
+    delete filter_unit;
     LOG_WARN("filter_stmt create lhs expression error");
     return rc;
   }
   Expression *right = nullptr;
   rc                = condition.right_expr->create_expression(*tables, table_arr, db, right, default_table);
   if (rc != RC::SUCCESS) {
+    delete condition.left_expr;
+    delete condition.right_expr;
+    delete filter_unit;
     LOG_WARN("filter_stmt create rhs expression error");
     return rc;
   }

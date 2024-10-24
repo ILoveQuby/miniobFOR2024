@@ -126,9 +126,6 @@ public:
    */
   virtual RC eval(Chunk &chunk, std::vector<uint8_t> &select) { return RC::UNIMPLEMENTED; }
 
-  void set_count(bool count) { count_ = count; }
-  bool count() const { return count_; }
-
 protected:
   /**
    * @brief 表达式在下层算子返回的 chunk 中的位置
@@ -140,7 +137,6 @@ protected:
 
 private:
   std::string name_;
-  bool        count_ = false;
 };
 
 class StarExpr : public Expression

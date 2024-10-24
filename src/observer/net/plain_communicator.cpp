@@ -246,7 +246,7 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
 
   rc = RC::SUCCESS;
   if (event->session()->get_execution_mode() == ExecutionMode::CHUNK_ITERATOR && event->session()->used_chunk_mode()) {
-    rc = write_chunk_result(sql_result);
+    rc = write_chunk_result(sql_result, sql_result->count());
   } else {
     rc = write_tuple_result(sql_result, sql_result->count());
 
@@ -344,10 +344,23 @@ RC PlainCommunicator::write_tuple_result(SqlResult *sql_result, bool count)
   return rc;
 }
 
-RC PlainCommunicator::write_chunk_result(SqlResult *sql_result)
+RC PlainCommunicator::write_chunk_result(SqlResult *sql_result, bool count)
 {
   RC    rc = RC::SUCCESS;
   Chunk chunk;
+  if (count) {
+    int chunk_num = 0;
+    while (RC::SUCCESS == (rc = sql_result->next_chunk(chunk)))
+      chunk_num += chunk.rows();
+    string str = std::to_string(chunk_num);
+    rc         = writer_->writen(str.data(), str.size());
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to send data to client. err=%s", strerror(errno));
+      sql_result->close();
+      return rc;
+    }
+    return rc;
+  }
   while (RC::SUCCESS == (rc = sql_result->next_chunk(chunk))) {
     int col_num = chunk.column_num();
     for (int row_idx = 0; row_idx < chunk.rows(); row_idx++) {

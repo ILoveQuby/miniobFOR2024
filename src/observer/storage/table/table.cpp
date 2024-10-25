@@ -295,9 +295,17 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   char *record_data = (char *)malloc(record_size);
   memset(record_data, 0, record_size);
 
+  const FieldMeta *null_field = table_meta_.null_field();
+  common::Bitmap   null_bitmap(record_data + null_field->offset(), null_field->len());
+  null_bitmap.clear_bits();
+
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value     &value = values[i];
+    if (value.is_null() && field->nullable()) {
+      null_bitmap.set_bit(i + normal_field_start_index);
+      continue;
+    }
     if (field->type() != value.attr_type()) {
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
@@ -511,10 +519,19 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
            name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
   }
   record_handler_->delete_record(&record.rid());
+  const FieldMeta *null_field = table_meta_.null_field();
+  common::Bitmap   bit_map(record.data() + null_field->offset(), null_field->len());
   for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
     const FieldMeta *cur_field = table_meta_.field(i);
     if (strcmp(fields.name(), cur_field->name()) == 0) {
-      set_value_to_record(record.data(), *values, cur_field);
+      if ((values->is_null() && !cur_field->nullable()) || values->attr_type() != cur_field->type())
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      if (values->is_null())
+        bit_map.set_bit(i);
+      else {
+        bit_map.clear_bit(i);
+        set_value_to_record(record.data(), *values, cur_field);
+      }
       break;
     }
   }

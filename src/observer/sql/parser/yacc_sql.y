@@ -115,6 +115,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         GE
         NE
         LIKE
+        IS
         NOT
         NULL_T
 
@@ -683,6 +684,24 @@ condition:
       $$->left_expr = $1;
       $$->right_expr = $3;
       $$->comp = $2;
+    }
+    | expression IS NULL_T
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_expr = $1;
+      $$->comp = IS_NULL;
+      Value val;
+      val.set_null();
+      $$->right_expr = new ValueExpr(val);
+    }
+    | expression IS NOT NULL_T
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_expr = $1;
+      $$->comp = IS_NOT_NULL;
+      Value val;
+      val.set_null();
+      $$->right_expr = new ValueExpr(val);
     }
     ;
 

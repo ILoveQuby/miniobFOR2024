@@ -121,8 +121,18 @@ ComparisonExpr::~ComparisonExpr() {}
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC rc = RC::SUCCESS;
+  if (comp_ == IS_NULL || comp_ == IS_NOT_NULL) {
+    ASSERT(right.is_null(), "right is not null");
+    result = comp_ == IS_NULL ? left.is_null() : !left.is_null();
+    return rc;
+  }
   if (left.is_null() || right.is_null()) {
     result = false;
+    return rc;
+  }
+  if (comp_ == LIKE_OP || comp_ == NOT_LIKE_OP) {
+    ASSERT(left.is_string() && right.is_string(), "left or right is not string");
+    result = comp_ == LIKE_OP ? left.compare_like(right) : !left.compare_like(right);
     return rc;
   }
   int cmp_result = left.compare(right);
@@ -145,12 +155,6 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     } break;
     case GREAT_THAN: {
       result = (cmp_result > 0);
-    } break;
-    case LIKE_OP: {
-      result = (left.compare_like(right) == 1);
-    } break;
-    case NOT_LIKE_OP: {
-      result = (left.compare_like(right) == 0);
     } break;
     default: {
       LOG_WARN("unsupported comparison. %d", comp_);

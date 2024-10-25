@@ -122,6 +122,7 @@ public:
 
   void set_null() { this->attr_type_ = AttrType::NULLS; }
   bool is_null() const { return this->attr_type_ == AttrType::NULLS; }
+  bool is_string() const { return this->attr_type_ == AttrType::CHARS; }
 
 public:
   /**

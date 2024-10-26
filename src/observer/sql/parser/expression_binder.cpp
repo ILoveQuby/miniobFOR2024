@@ -41,6 +41,8 @@ static void wildcard_fields(Table *table, vector<unique_ptr<Expression>> &expres
     Field      field(table, table_meta.field(i));
     FieldExpr *field_expr = new FieldExpr(field);
     field_expr->set_name(field.field_name());
+    field_expr->set_field_name(field.field_name());
+    field_expr->set_table_name(field.table_name());
     expressions.emplace_back(field_expr);
   }
 }
@@ -127,6 +129,14 @@ RC ExpressionBinder::bind_star_expression(
 
   for (Table *table : tables_to_wildcard) {
     wildcard_fields(table, bound_expressions);
+    if (tables_to_wildcard.size() > 1) {
+      for (auto &expr : bound_expressions) {
+        FieldExpr *field_expr = static_cast<FieldExpr *>(expr.get());
+        string     field_name = field_expr->get_field_name();
+        string     table_name = field_expr->get_table_name();
+        expr->set_name(table_name + '.' + field_name);
+      }
+    }
   }
 
   return RC::SUCCESS;

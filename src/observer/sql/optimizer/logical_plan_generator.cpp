@@ -95,64 +95,146 @@ RC LogicalPlanGenerator::create_plan(CalcStmt *calc_stmt, std::unique_ptr<Logica
 
 RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
-  unique_ptr<LogicalOperator> *last_oper = nullptr;
-
-  unique_ptr<LogicalOperator> table_oper(nullptr);
-  last_oper = &table_oper;
-
-  const std::vector<Table *> &tables = select_stmt->tables();
-  for (Table *table : tables) {
-
+  const std::vector<SelectStmt::JoinTables> &tables = select_stmt->join_tables();
+  auto process_one_table = [this](unique_ptr<LogicalOperator> &prev_oper, Table *table, FilterStmt *filter_stmt) {
     unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
-    if (table_oper == nullptr) {
-      table_oper = std::move(table_get_oper);
+    unique_ptr<LogicalOperator> predicate_oper;
+    if (filter_stmt != nullptr) {
+      if (RC rc = create_plan(filter_stmt, predicate_oper); rc != RC::SUCCESS) {
+        LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+        return rc;
+      }
+    }
+    if (prev_oper == nullptr) {
+      if (predicate_oper) {
+        static_cast<TableGetLogicalOperator *>(table_get_oper.get())
+            ->set_predicates(std::move(predicate_oper->expressions()));
+      }
+      prev_oper = std::move(table_get_oper);
     } else {
-      JoinLogicalOperator *join_oper = new JoinLogicalOperator;
-      join_oper->add_child(std::move(table_oper));
+      unique_ptr<JoinLogicalOperator> join_oper = make_unique<JoinLogicalOperator>();
+      join_oper->add_child(std::move(prev_oper));
       join_oper->add_child(std::move(table_get_oper));
-      table_oper = unique_ptr<LogicalOperator>(join_oper);
+      if (predicate_oper) {
+        predicate_oper->add_child(std::move(join_oper));
+        prev_oper = std::move(predicate_oper);
+      } else {
+        prev_oper = std::move(join_oper);
+      }
+    }
+    return RC::SUCCESS;
+  };
+  unique_ptr<LogicalOperator> oper(nullptr);
+  for (auto &jt : tables) {
+    unique_ptr<LogicalOperator> prev_oper(nullptr);
+    auto                       &join_tables = jt.join_tables();
+    auto                       &on_conds    = jt.on_conds();
+    for (size_t i = 0; i < join_tables.size(); i++) {
+      if (RC rc = process_one_table(prev_oper, join_tables[i], on_conds[i]); rc != RC::SUCCESS)
+        return rc;
+    }
+    if (oper == nullptr)
+      oper = std::move(prev_oper);
+    else {
+      unique_ptr<JoinLogicalOperator> join_oper = make_unique<JoinLogicalOperator>();
+      join_oper->add_child(std::move(oper));
+      join_oper->add_child(std::move(prev_oper));
+      oper = std::move(join_oper);
     }
   }
+  unique_ptr<LogicalOperator> top_oper = std::move(oper);
+  if (select_stmt->filter_stmt()) {
+    unique_ptr<LogicalOperator> predicate_oper;
 
-  unique_ptr<LogicalOperator> predicate_oper;
-
-  RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
-    return rc;
-  }
-
-  if (predicate_oper) {
-    if (*last_oper) {
-      predicate_oper->add_child(std::move(*last_oper));
+    RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+      return rc;
     }
 
-    last_oper = &predicate_oper;
+    if (predicate_oper) {
+      predicate_oper->add_child(std::move(top_oper));
+      top_oper = std::move(predicate_oper);
+    }
   }
 
   unique_ptr<LogicalOperator> group_by_oper;
-  rc = create_group_by_plan(select_stmt, group_by_oper);
+  RC                          rc = create_group_by_plan(select_stmt, group_by_oper);
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
     return rc;
   }
 
   if (group_by_oper) {
-    if (*last_oper) {
-      group_by_oper->add_child(std::move(*last_oper));
-    }
-
-    last_oper = &group_by_oper;
+    group_by_oper->add_child(std::move(top_oper));
+    top_oper = std::move(group_by_oper);
   }
 
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
-  if (*last_oper) {
-    project_oper->add_child(std::move(*last_oper));
-  }
-
-  logical_operator = std::move(project_oper);
+  project_oper->add_child(std::move(top_oper));
+  top_oper         = std::move(project_oper);
+  logical_operator = std::move(top_oper);
   return RC::SUCCESS;
 }
+// {
+//   unique_ptr<LogicalOperator> *last_oper = nullptr;
+
+//   unique_ptr<LogicalOperator> table_oper(nullptr);
+//   last_oper = &table_oper;
+
+//   const std::vector<Table *> &tables = select_stmt->tables();
+//   for (Table *table : tables) {
+
+//     unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
+//     if (table_oper == nullptr) {
+//       table_oper = std::move(table_get_oper);
+//     } else {
+//       JoinLogicalOperator *join_oper = new JoinLogicalOperator;
+//       join_oper->add_child(std::move(table_oper));
+//       join_oper->add_child(std::move(table_get_oper));
+//       table_oper = unique_ptr<LogicalOperator>(join_oper);
+//     }
+//   }
+
+//   unique_ptr<LogicalOperator> predicate_oper;
+
+//   RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
+//   if (OB_FAIL(rc)) {
+//     LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+//     return rc;
+//   }
+
+//   if (predicate_oper) {
+//     if (*last_oper) {
+//       predicate_oper->add_child(std::move(*last_oper));
+//     }
+
+//     last_oper = &predicate_oper;
+//   }
+
+//   unique_ptr<LogicalOperator> group_by_oper;
+//   rc = create_group_by_plan(select_stmt, group_by_oper);
+//   if (OB_FAIL(rc)) {
+//     LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
+//     return rc;
+//   }
+
+//   if (group_by_oper) {
+//     if (*last_oper) {
+//       group_by_oper->add_child(std::move(*last_oper));
+//     }
+
+//     last_oper = &group_by_oper;
+//   }
+
+//   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
+//   if (*last_oper) {
+//     project_oper->add_child(std::move(*last_oper));
+//   }
+
+//   logical_operator = std::move(project_oper);
+//   return RC::SUCCESS;
+// }
 
 RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {

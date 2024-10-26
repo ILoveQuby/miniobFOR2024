@@ -92,6 +92,8 @@ public:
   virtual RC create_expression(const std::unordered_map<std::string, Table *> &table_map,
       const std::vector<Table *> &tables, Db *db, Expression *&res_expr, Table *default_table = nullptr) = 0;
 
+  virtual RC traverse_check(const std::function<RC(Expression *)> &func) { return func(this); }
+
   /**
    * @brief 表达式的类型
    * 可以根据表达式类型来转换为具体的子类
@@ -218,8 +220,8 @@ public:
   const char *table_name() const { return field_.table_name(); }
   const char *field_name() const { return field_.field_name(); }
 
-  std::string &get_table_name() { return table_name_; }
-  std::string &get_field_name() { return field_name_; }
+  const std::string &get_table_name() const { return table_name_; }
+  const std::string &get_field_name() const { return field_name_; }
 
   void set_table_name(std::string table_name) { table_name_ = table_name; }
   void set_field_name(std::string field_name) { field_name_ = field_name; }
@@ -307,6 +309,15 @@ public:
     res_expr = tmp;
     return RC::SUCCESS;
   }
+  RC traverse_check(const std::function<RC(Expression *)> &func) override
+  {
+    if (RC rc = func(this); RC::SUCCESS != rc) {
+      return rc;
+    } else if (rc = child_->traverse_check(func); RC::SUCCESS != rc) {
+      return rc;
+    }
+    return RC::SUCCESS;
+  }
 
 private:
   RC cast(const Value &value, Value &cast_value) const;
@@ -360,6 +371,18 @@ public:
   {
     return RC::SUCCESS;
   }
+  RC traverse_check(const std::function<RC(Expression *)> &func) override
+  {
+    RC rc = RC::SUCCESS;
+    if (RC::SUCCESS != (rc = func(this))) {
+      return rc;
+    } else if (RC::SUCCESS != (rc = left_->traverse_check(func))) {
+      return rc;
+    } else if (right_ && RC::SUCCESS != (rc = right_->traverse_check(func))) {
+      return rc;
+    }
+    return RC::SUCCESS;
+  }
 
 private:
   CompOp                      comp_;
@@ -397,6 +420,19 @@ public:
   RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
       Db *db, Expression *&res_expr, Table *default_table = nullptr)
   {
+    return RC::SUCCESS;
+  }
+  RC traverse_check(const std::function<RC(Expression *)> &func) override
+  {
+    RC rc = RC::SUCCESS;
+    if (RC::SUCCESS != (rc = func(this))) {
+      return rc;
+    }
+    for (auto &child : children_) {
+      if (RC::SUCCESS != (rc = child->traverse_check(func))) {
+        return rc;
+      }
+    }
     return RC::SUCCESS;
   }
 
@@ -451,6 +487,18 @@ public:
 
   RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
       Db *db, Expression *&res_expr, Table *default_table = nullptr) override;
+  RC traverse_check(const std::function<RC(Expression *)> &func) override
+  {
+    RC rc = RC::SUCCESS;
+    if (RC::SUCCESS != (rc = func(this))) {
+      return rc;
+    } else if (RC::SUCCESS != (rc = left_->traverse_check(func))) {
+      return rc;
+    } else if (right_ && RC::SUCCESS != (rc = right_->traverse_check(func))) {
+      return rc;
+    }
+    return RC::SUCCESS;
+  }
 
 private:
   RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
@@ -484,6 +532,16 @@ public:
       Db *db, Expression *&res_expr, Table *default_table = nullptr)
   {
     return RC::SUCCESS;
+  }
+  RC traverse_check(const std::function<RC(Expression *)> &func) override
+  {
+    RC rc = RC::SUCCESS;
+    if (RC::SUCCESS != (rc = func(this))) {
+      return rc;
+    } else if (RC::SUCCESS != (rc = child_->traverse_check(func))) {
+      return rc;
+    }
+    return rc;
   }
 
 private:
@@ -531,6 +589,16 @@ public:
       Db *db, Expression *&res_expr, Table *default_table = nullptr)
   {
     return RC::SUCCESS;
+  }
+  RC traverse_check(const std::function<RC(Expression *)> &func) override
+  {
+    RC rc = RC::SUCCESS;
+    if (RC::SUCCESS != (rc = func(this))) {
+      return rc;
+    } else if (RC::SUCCESS != (rc = child_->traverse_check(func))) {
+      return rc;
+    }
+    return rc;
   }
 
 public:

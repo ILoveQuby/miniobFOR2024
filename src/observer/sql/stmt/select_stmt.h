@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 #include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
+#include "sql/stmt/filter_stmt.h"
 
 class FieldMeta;
 class FilterStmt;
@@ -33,6 +34,38 @@ class Table;
 class SelectStmt : public Stmt
 {
 public:
+  class JoinTables
+  {
+  public:
+    JoinTables() = default;
+    ~JoinTables()
+    {
+      for (FilterStmt *stmt : on_conds_) {
+        if (stmt != nullptr) {
+          delete stmt;
+          stmt = nullptr;
+        }
+      }
+    }
+    JoinTables(JoinTables &&other)
+    {
+      join_tables_.swap(other.join_tables_);
+      on_conds_.swap(other.on_conds_);
+    }
+    void push(Table *table, FilterStmt *on_cond)
+    {
+      join_tables_.emplace_back(table);
+      on_conds_.emplace_back(on_cond);
+    }
+    const std::vector<Table *>      join_tables() const { return join_tables_; }
+    const std::vector<FilterStmt *> on_conds() const { return on_conds_; }
+
+  private:
+    std::vector<Table *>      join_tables_;
+    std::vector<FilterStmt *> on_conds_;
+  };
+
+public:
   SelectStmt() = default;
   ~SelectStmt() override;
 
@@ -42,15 +75,15 @@ public:
   static RC create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt);
 
 public:
-  const std::vector<Table *> &tables() const { return tables_; }
-  FilterStmt                 *filter_stmt() const { return filter_stmt_; }
+  const std::vector<JoinTables> &join_tables() const { return join_tables_; }
+  FilterStmt                    *filter_stmt() const { return filter_stmt_; }
 
   std::vector<std::unique_ptr<Expression>> &query_expressions() { return query_expressions_; }
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
 
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
-  std::vector<Table *>                     tables_;
+  std::vector<JoinTables>                  join_tables_;
   FilterStmt                              *filter_stmt_ = nullptr;
   std::vector<std::unique_ptr<Expression>> group_by_;
 };

@@ -120,6 +120,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NULL_T
         INNER
         JOIN
+        MAX
+        MIN
+        SUM
+        AVG
+        COUNT
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -660,6 +665,24 @@ expression:
       ValueExpr *val = new ValueExpr(*$2);
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, val, sql_string, &@$);
       delete $2;
+    }
+    | SUM LBRACE expression RBRACE {
+      $$ = create_aggregate_expression("SUM", $3, sql_string, &@$);
+    }
+    | MAX LBRACE expression RBRACE {
+      $$ = create_aggregate_expression("MAX", $3, sql_string, &@$);
+    }
+    | MIN LBRACE expression RBRACE {
+      $$ = create_aggregate_expression("MIN", $3, sql_string, &@$);
+    }
+    | AVG LBRACE expression RBRACE {
+      $$ = create_aggregate_expression("AVG", $3, sql_string, &@$);
+    }
+    | COUNT LBRACE expression RBRACE {
+      $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
+    }
+    | COUNT LBRACE '*' RBRACE {
+      $$ = create_aggregate_expression("COUNT", new StarExpr(), sql_string, &@$);
     }
     // your code here
     ;

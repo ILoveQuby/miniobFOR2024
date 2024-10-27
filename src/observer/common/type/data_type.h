@@ -59,6 +59,10 @@ public:
    */
   virtual RC add(const Value &left, const Value &right, Value &result) const { return RC::UNSUPPORTED; }
 
+  virtual RC max(const Value &left, const Value &right, Value &result) const { return RC::UNSUPPORTED; }
+
+  virtual RC min(const Value &left, const Value &right, Value &result) const { return RC::UNSUPPORTED; }
+
   /**
    * @brief 计算 left - right，并将结果保存到 result 中
    */

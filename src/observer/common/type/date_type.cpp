@@ -9,6 +9,24 @@ int DateType::compare(const Value &left, const Value &right) const
   return common::compare_int((void *)&left.value_.int_value_, (void *)&right.value_.int_value_);
 }
 
+RC DateType::max(const Value &left, const Value &right, Value &result) const
+{
+  if (compare(left, right) >= 0)
+    result.set_int(left.get_int());
+  else
+    result.set_int(right.get_int());
+  return RC::SUCCESS;
+}
+
+RC DateType::min(const Value &left, const Value &right, Value &result) const
+{
+  if (compare(left, right) >= 0)
+    result.set_int(right.get_int());
+  else
+    result.set_int(left.get_int());
+  return RC::SUCCESS;
+}
+
 RC DateType::to_string(const Value &val, string &result) const
 {
   stringstream ss;

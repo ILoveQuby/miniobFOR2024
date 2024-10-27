@@ -21,6 +21,24 @@ int CharType::compare(const Value &left, const Value &right) const
       (void *)left.value_.pointer_value_, left.length_, (void *)right.value_.pointer_value_, right.length_);
 }
 
+RC CharType::max(const Value &left, const Value &right, Value &result) const
+{
+  if (compare(left, right) >= 0)
+    result.set_data(left.get_string().c_str(), left.get_string().length());
+  else
+    result.set_data(right.get_string().c_str(), right.get_string().length());
+  return RC::SUCCESS;
+}
+
+RC CharType::min(const Value &left, const Value &right, Value &result) const
+{
+  if (compare(left, right) >= 0)
+    result.set_data(right.get_string().c_str(), right.get_string().length());
+  else
+    result.set_data(left.get_string().c_str(), left.get_string().length());
+  return RC::SUCCESS;
+}
+
 int CharType::compare_like(const Value &left, const Value &right) const
 {
   ASSERT(left.attr_type() == AttrType::CHARS && right.attr_type() == AttrType::CHARS, "invalid type");

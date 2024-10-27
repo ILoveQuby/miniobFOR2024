@@ -25,6 +25,8 @@ public:
   virtual ~CharType() = default;
 
   int compare(const Value &left, const Value &right) const override;
+  RC  min(const Value &left, const Value &right, Value &result) const override;
+  RC  max(const Value &left, const Value &right, Value &result) const override;
 
   int compare_like(const Value &left, const Value &right) const override;
 

@@ -34,6 +34,24 @@ RC IntegerType::add(const Value &left, const Value &right, Value &result) const
   return RC::SUCCESS;
 }
 
+RC IntegerType::max(const Value &left, const Value &right, Value &result) const
+{
+  if (compare(left, right) >= 0)
+    result.set_int(left.get_int());
+  else
+    result.set_int(right.get_int());
+  return RC::SUCCESS;
+}
+
+RC IntegerType::min(const Value &left, const Value &right, Value &result) const
+{
+  if (compare(left, right) >= 0)
+    result.set_int(right.get_int());
+  else
+    result.set_int(left.get_int());
+  return RC::SUCCESS;
+}
+
 RC IntegerType::subtract(const Value &left, const Value &right, Value &result) const
 {
   result.set_int(left.get_int() - right.get_int());
@@ -54,7 +72,7 @@ RC IntegerType::negative(const Value &val, Value &result) const
 
 RC IntegerType::set_value_from_str(Value &val, const string &data) const
 {
-  RC                rc = RC::SUCCESS;
+  RC           rc = RC::SUCCESS;
   stringstream deserialize_stream;
   deserialize_stream.clear();  // 清理stream的状态，防止多次解析出现异常
   deserialize_stream.str(data);

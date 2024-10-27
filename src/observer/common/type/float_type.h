@@ -25,6 +25,8 @@ public:
   int compare(const Value &left, const Value &right) const override;
 
   RC add(const Value &left, const Value &right, Value &result) const override;
+  RC max(const Value &left, const Value &right, Value &result) const override;
+  RC min(const Value &left, const Value &right, Value &result) const override;
   RC subtract(const Value &left, const Value &right, Value &result) const override;
   RC multiply(const Value &left, const Value &right, Value &result) const override;
   RC divide(const Value &left, const Value &right, Value &result) const override;

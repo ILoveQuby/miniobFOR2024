@@ -30,6 +30,22 @@ RC FloatType::add(const Value &left, const Value &right, Value &result) const
   result.set_float(left.get_float() + right.get_float());
   return RC::SUCCESS;
 }
+RC FloatType::max(const Value &left, const Value &right, Value &result) const
+{
+  if (compare(left, right) >= 0)
+    result.set_float(left.get_float());
+  else
+    result.set_float(right.get_float());
+  return RC::SUCCESS;
+}
+RC FloatType::min(const Value &left, const Value &right, Value &result) const
+{
+  if (compare(left, right) >= 0)
+    result.set_float(right.get_float());
+  else
+    result.set_float(left.get_float());
+  return RC::SUCCESS;
+}
 RC FloatType::subtract(const Value &left, const Value &right, Value &result) const
 {
   result.set_float(left.get_float() - right.get_float());

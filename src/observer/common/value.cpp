@@ -250,7 +250,13 @@ string Value::to_string() const
 int Value::compare(const Value &other) const
 {
   ASSERT(!this->is_null() && !other.is_null(), "Cound Not Be Null!");
-  return DataType::type_instance(this->attr_type_)->compare(*this, other);
+  if (this->attr_type_ == other.attr_type_)
+    return DataType::type_instance(this->attr_type_)->compare(*this, other);
+  else {
+    float this_data  = this->get_float();
+    float other_data = other.get_float();
+    return common::compare_float((void *)&this_data, (void *)&other_data);
+  }
 }
 
 int Value::compare_like(const Value &other) const

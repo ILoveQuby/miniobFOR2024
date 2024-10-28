@@ -688,6 +688,18 @@ expression:
     | COUNT LBRACE expression RBRACE {
       $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
     }
+    | SUM LBRACE '*' RBRACE {
+      $$ = create_aggregate_expression("SUM", new StarExpr(), sql_string, &@$);
+    }
+    | MAX LBRACE '*' RBRACE {
+      $$ = create_aggregate_expression("MAX", new StarExpr(), sql_string, &@$);
+    }
+    | MIN LBRACE '*' RBRACE {
+      $$ = create_aggregate_expression("MIN", new StarExpr(), sql_string, &@$);
+    }
+    | AVG LBRACE '*' RBRACE {
+      $$ = create_aggregate_expression("AVG", new StarExpr(), sql_string, &@$);
+    }
     | COUNT LBRACE '*' RBRACE {
       $$ = create_aggregate_expression("COUNT", new StarExpr(), sql_string, &@$);
     }

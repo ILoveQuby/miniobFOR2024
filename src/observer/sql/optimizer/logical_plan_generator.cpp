@@ -445,6 +445,11 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   if (aggregate_expressions.empty() && !having_expressions.empty())
     return RC::INVALID_ARGUMENT;
 
+  for (auto expr : aggregate_expressions) {
+    if (expr->type() == ExprType::STAR)
+      return RC::INVALID_ARGUMENT;
+  }
+
   // 如果只需要聚合，但是没有group by 语句，需要生成一个空的group by 语句
 
   auto group_by_oper =

@@ -544,6 +544,10 @@ UnboundAggregateExpr::UnboundAggregateExpr(const char *aggregate_name, Expressio
     : aggregate_name_(aggregate_name), child_(child)
 {}
 
+UnboundAggregateExpr::UnboundAggregateExpr(const char *aggregate_name, unique_ptr<Expression> child)
+    : aggregate_name_(aggregate_name), child_(std::move(child))
+{}
+
 RC UnboundAggregateExpr::get_value(const Tuple &tuple, Value &value) const
 {
   return tuple.find_cell(TupleCellSpec(name()), value);

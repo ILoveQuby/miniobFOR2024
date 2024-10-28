@@ -120,11 +120,6 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NULL_T
         INNER
         JOIN
-        MAX
-        MIN
-        SUM
-        AVG
-        COUNT
         HAVING
 
 
@@ -151,6 +146,11 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 
 %token <number> NUMBER
 %token <floats> FLOAT
+%token <string> MAX
+%token <string> MIN
+%token <string> SUM
+%token <string> AVG
+%token <string> COUNT
 %token <string> ID
 %token <string> SSS
 %token <string> DATE_STR
@@ -170,6 +170,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <condition_list>      condition_list
 %type<expression_list>      select_attr
 %type <string>              storage_format
+%type <string>              aggregate_type
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type<inner_joins>          join_list
@@ -673,37 +674,39 @@ expression:
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, val, sql_string, &@$);
       delete $2;
     }
-    | SUM LBRACE expression RBRACE {
-      $$ = create_aggregate_expression("SUM", $3, sql_string, &@$);
+    | '*' {
+      $$ = new StarExpr();
     }
-    | MAX LBRACE expression RBRACE {
-      $$ = create_aggregate_expression("MAX", $3, sql_string, &@$);
+    | aggregate_type LBRACE expression RBRACE {
+      $$ = create_aggregate_expression($1, $3, sql_string, &@$);
     }
-    | MIN LBRACE expression RBRACE {
-      $$ = create_aggregate_expression("MIN", $3, sql_string, &@$);
+    | aggregate_type LBRACE expression COMMA expression_list RBRACE {
+      $$ = create_aggregate_expression("MAX", new StarExpr(), sql_string, &@$);
+      delete $3;
+      delete $5;
     }
-    | AVG LBRACE expression RBRACE {
-      $$ = create_aggregate_expression("AVG", $3, sql_string, &@$);
-    }
-    | COUNT LBRACE expression RBRACE {
-      $$ = create_aggregate_expression("COUNT", $3, sql_string, &@$);
-    }
-    | SUM LBRACE '*' RBRACE {
-      $$ = create_aggregate_expression("SUM", new StarExpr(), sql_string, &@$);
-    }
-    | MAX LBRACE '*' RBRACE {
+    | aggregate_type LBRACE RBRACE {
       $$ = create_aggregate_expression("MAX", new StarExpr(), sql_string, &@$);
     }
-    | MIN LBRACE '*' RBRACE {
-      $$ = create_aggregate_expression("MIN", new StarExpr(), sql_string, &@$);
-    }
-    | AVG LBRACE '*' RBRACE {
-      $$ = create_aggregate_expression("AVG", new StarExpr(), sql_string, &@$);
-    }
-    | COUNT LBRACE '*' RBRACE {
-      $$ = create_aggregate_expression("COUNT", new StarExpr(), sql_string, &@$);
-    }
     // your code here
+    ;
+
+aggregate_type:
+    SUM {
+      $$ = $1;
+    }
+    | MAX {
+      $$ = $1;
+    }
+    | MIN {
+      $$ = $1;
+    }
+    | AVG {
+      $$ = $1;
+    }
+    | COUNT {
+      $$ = $1;
+    }
     ;
 
 rel_attr:
@@ -722,12 +725,7 @@ rel_attr:
     ;
 
   select_attr:
-      '*' {
-        $$ = new std::vector<std::unique_ptr<Expression>>;
-        StarExpr *expr = new StarExpr();
-        $$->emplace_back(expr); 
-      }
-      | '*' DOT '*' {
+      '*' DOT '*' {
         $$ = new std::vector<std::unique_ptr<Expression>>;
         StarExpr *expr = new StarExpr("*");
         $$->emplace_back(expr);

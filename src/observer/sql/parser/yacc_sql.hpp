@@ -108,14 +108,14 @@ extern int yydebug;
     NULL_T = 309,                  /* NULL_T  */
     INNER = 310,                   /* INNER  */
     JOIN = 311,                    /* JOIN  */
-    MAX = 312,                     /* MAX  */
-    MIN = 313,                     /* MIN  */
-    SUM = 314,                     /* SUM  */
-    AVG = 315,                     /* AVG  */
-    COUNT = 316,                   /* COUNT  */
-    HAVING = 317,                  /* HAVING  */
-    NUMBER = 318,                  /* NUMBER  */
-    FLOAT = 319,                   /* FLOAT  */
+    HAVING = 312,                  /* HAVING  */
+    NUMBER = 313,                  /* NUMBER  */
+    FLOAT = 314,                   /* FLOAT  */
+    MAX = 315,                     /* MAX  */
+    MIN = 316,                     /* MIN  */
+    SUM = 317,                     /* SUM  */
+    AVG = 318,                     /* AVG  */
+    COUNT = 319,                   /* COUNT  */
     ID = 320,                      /* ID  */
     SSS = 321,                     /* SSS  */
     DATE_STR = 322,                /* DATE_STR  */
@@ -128,7 +128,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 132 "yacc_sql.y"
+#line 127 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;

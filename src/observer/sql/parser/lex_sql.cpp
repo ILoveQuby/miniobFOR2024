@@ -1332,27 +1332,27 @@ RETURN_TOKEN(JOIN);
 case 51:
 YY_RULE_SETUP
 #line 129 "lex_sql.l"
-RETURN_TOKEN(MAX);
+yylval->string=strdup(yytext); RETURN_TOKEN(MAX);
 	YY_BREAK
 case 52:
 YY_RULE_SETUP
 #line 130 "lex_sql.l"
-RETURN_TOKEN(MIN);
+yylval->string=strdup(yytext); RETURN_TOKEN(MIN);
 	YY_BREAK
 case 53:
 YY_RULE_SETUP
 #line 131 "lex_sql.l"
-RETURN_TOKEN(SUM);
+yylval->string=strdup(yytext); RETURN_TOKEN(SUM);
 	YY_BREAK
 case 54:
 YY_RULE_SETUP
 #line 132 "lex_sql.l"
-RETURN_TOKEN(AVG);
+yylval->string=strdup(yytext); RETURN_TOKEN(AVG);
 	YY_BREAK
 case 55:
 YY_RULE_SETUP
 #line 133 "lex_sql.l"
-RETURN_TOKEN(COUNT);
+yylval->string=strdup(yytext); RETURN_TOKEN(COUNT);
 	YY_BREAK
 case 56:
 YY_RULE_SETUP

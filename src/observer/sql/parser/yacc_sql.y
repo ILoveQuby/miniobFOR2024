@@ -125,6 +125,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         SUM
         AVG
         COUNT
+        HAVING
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -175,6 +176,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type<inner_joins>          from_node
 %type<inner_joins_list>     from_list
 %type <expression_list>     group_by
+%type <condition_list>      opt_having
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -570,7 +572,7 @@ join_list:
     }
 
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM from_node from_list where group_by
+    SELECT select_attr FROM from_node from_list where group_by opt_having
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -593,6 +595,11 @@ select_stmt:        /*  select 语句的语法解析树*/
       if ($7 != nullptr) {
         $$->selection.group_by.swap(*$7);
         delete $7;
+      }
+
+      if($8 != nullptr) {
+        $$->selection.having_conditions.swap(*$8);
+        delete $8;
       }
 
       delete $4;
@@ -794,7 +801,22 @@ group_by:
     {
       $$ = nullptr;
     }
+    | GROUP BY expression_list
+    {
+      $$ = $3;
+    }
     ;
+
+opt_having:
+    /* empty */ {
+      $$ = nullptr;
+    }
+    | HAVING condition_list 
+    {
+      $$ = $2;
+    }
+    ;
+
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {

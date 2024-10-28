@@ -64,3 +64,9 @@ public:
   RC accumulate(const Value &value) override;
   RC evaluate(Value &result) override;
 };
+
+class CountStarAggregator : public Aggregator
+{
+  RC accumulate(const Value &value) override;
+  RC evaluate(Value &result) override;
+};

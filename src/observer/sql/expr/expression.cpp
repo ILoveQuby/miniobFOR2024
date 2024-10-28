@@ -32,7 +32,7 @@ bool FieldExpr::equal(const Expression &other) const
     return false;
   }
   const auto &other_field_expr = static_cast<const FieldExpr &>(other);
-  return table_name() == other_field_expr.table_name() && field_name() == other_field_expr.field_name();
+  return get_table_name() == other_field_expr.get_table_name() && get_field_name() == other_field_expr.get_field_name();
 }
 
 // TODO: 在进行表达式计算时，`chunk` 包含了所有列，因此可以通过 `field_id` 获取到对应列。
@@ -263,7 +263,7 @@ RC ComparisonExpr::compare_column(const Column &left, const Column &right, std::
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-ConjunctionExpr::ConjunctionExpr(Type type, vector<unique_ptr<Expression>> &children)
+ConjunctionExpr::ConjunctionExpr(Type type, vector<unique_ptr<Expression>> children)
     : conjunction_type_(type), children_(std::move(children))
 {}
 
@@ -544,6 +544,11 @@ UnboundAggregateExpr::UnboundAggregateExpr(const char *aggregate_name, Expressio
     : aggregate_name_(aggregate_name), child_(child)
 {}
 
+RC UnboundAggregateExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  return tuple.find_cell(TupleCellSpec(name()), value);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 AggregateExpr::AggregateExpr(Type type, Expression *child) : aggregate_type_(type), child_(child) {}
 
@@ -594,7 +599,10 @@ unique_ptr<Aggregator> AggregateExpr::create_aggregator() const
       break;
     }
     case Type::COUNT: {
-      aggregator = make_unique<CountAggregator>();
+      if (child_->type() == ExprType::STAR)
+        aggregator = make_unique<CountStarAggregator>();
+      else
+        aggregator = make_unique<CountAggregator>();
       break;
     }
     default: {
@@ -706,6 +714,49 @@ RC FieldExpr::create_expression(const std::unordered_map<std::string, Table *> &
     FieldExpr *tmp = new FieldExpr(table, field_meta);
     tmp->set_name(std::string(tmp->field_name()));
     res_expr = tmp;
+  }
+  return RC::SUCCESS;
+}
+
+RC FieldExpr::check_field(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
+    Table *default_table, const std::unordered_map<std::string, std::string> &table_alias_map)
+{
+  ASSERT(field_name_ != "*", "ERROR!");
+  const char *table_name = table_name_.c_str();
+  const char *field_name = field_name_.c_str();
+  Table      *table      = nullptr;
+  if (!common::is_blank(table_name)) {  // 表名不为空
+    // check table
+    auto iter = table_map.find(table_name);
+    if (iter == table_map.end()) {
+      LOG_WARN("no such table in from list: %s", table_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    table = iter->second;
+  } else {  // 表名为空，只有列名
+    if (tables.size() != 1 && default_table == nullptr) {
+      LOG_WARN("invalid. I do not know the attr's table. attr=%s", this->get_field_name().c_str());
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    table = default_table ? default_table : tables[0];
+  }
+  ASSERT(nullptr != table, "ERROR!");
+  // set table_name
+  table_name = table->name();
+  // check field
+  const FieldMeta *field_meta = table->table_meta().field(field_name);
+  if (nullptr == field_meta) {
+    LOG_WARN("no such field. field=%s.%s", table->name(), field_name);
+    return RC::SCHEMA_FIELD_MISSING;
+  }
+  // set field_
+  field_ = Field(table, field_meta);
+  set_table_name(table_name);
+  bool is_single_table = (tables.size() == 1);
+  if (is_single_table) {
+    set_name(field_name_);
+  } else {
+    set_name(table_name_ + "." + field_name_);
   }
   return RC::SUCCESS;
 }

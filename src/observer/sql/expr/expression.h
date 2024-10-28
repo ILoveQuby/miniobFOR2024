@@ -126,7 +126,8 @@ public:
   /**
    * @brief 用于 ComparisonExpr 获得比较结果 `select`。
    */
-  virtual RC eval(Chunk &chunk, std::vector<uint8_t> &select) { return RC::UNIMPLEMENTED; }
+  virtual RC                          eval(Chunk &chunk, std::vector<uint8_t> &select) { return RC::UNIMPLEMENTED; }
+  virtual std::unique_ptr<Expression> deep_copy() const = 0;
 
 protected:
   /**
@@ -158,7 +159,8 @@ public:
     return RC::SUCCESS;
   }
 
-  const char *table_name() const { return table_name_.c_str(); }
+  const char            *table_name() const { return table_name_.c_str(); }
+  unique_ptr<Expression> deep_copy() const override { return unique_ptr<StarExpr>(new StarExpr(*this)); }
 
 private:
   std::string table_name_;
@@ -183,8 +185,9 @@ public:
     return RC::SUCCESS;
   }
 
-  const char *table_name() const { return table_name_.c_str(); }
-  const char *field_name() const { return field_name_.c_str(); }
+  const char                 *table_name() const { return table_name_.c_str(); }
+  const char                 *field_name() const { return field_name_.c_str(); }
+  std::unique_ptr<Expression> deep_copy() const override { return nullptr; }
 
 private:
   std::string table_name_;
@@ -202,8 +205,10 @@ public:
   FieldExpr(const Table *table, const FieldMeta *field, std::string &table_name, std::string &field_name)
       : field_(table, field), table_name_(table_name), field_name_(field_name)
   {}
-  FieldExpr(const Table *table, const FieldMeta *field) : field_(table, field) {}
-  FieldExpr(const Field &field) : field_(field) {}
+  FieldExpr(const Table *table, const FieldMeta *field)
+      : field_(table, field), table_name_(field_.table_name()), field_name_(field_.field_name())
+  {}
+  FieldExpr(const Field &field) : field_(field), table_name_(field_.table_name()), field_name_(field_.field_name()) {}
 
   virtual ~FieldExpr() = default;
 
@@ -232,6 +237,11 @@ public:
 
   RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
       Db *db, Expression *&res_expr, Table *default_table = nullptr) override;
+
+  RC check_field(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
+      Table *default_table = nullptr, const std::unordered_map<std::string, std::string> &table_alias_map = {});
+
+  std::unique_ptr<Expression> deep_copy() const override { return std::unique_ptr<FieldExpr>(new FieldExpr(*this)); }
 
 private:
   Field       field_;
@@ -276,6 +286,7 @@ public:
     res_expr = tmp_expr;
     return RC::SUCCESS;
   }
+  std::unique_ptr<Expression> deep_copy() const override { return std::unique_ptr<ValueExpr>(new ValueExpr(*this)); }
 
 private:
   Value value_;
@@ -317,6 +328,12 @@ public:
       return rc;
     }
     return RC::SUCCESS;
+  }
+  std::unique_ptr<Expression> deep_copy() const override
+  {
+    auto new_expr = std::make_unique<CastExpr>(child_->deep_copy(), cast_type_);
+    new_expr->set_name(name());
+    return new_expr;
   }
 
 private:
@@ -383,6 +400,17 @@ public:
     }
     return RC::SUCCESS;
   }
+  std::unique_ptr<Expression> deep_copy() const override
+  {
+    std::unique_ptr<Expression> new_left = left_->deep_copy();
+    std::unique_ptr<Expression> new_right;
+    if (right_) {
+      new_right = right_->deep_copy();
+    }
+    auto new_expr = std::make_unique<ComparisonExpr>(comp_, std::move(new_left), std::move(new_right));
+    new_expr->set_name(name());
+    return new_expr;
+  }
 
 private:
   CompOp                      comp_;
@@ -406,7 +434,7 @@ public:
   };
 
 public:
-  ConjunctionExpr(Type type, std::vector<std::unique_ptr<Expression>> &children);
+  ConjunctionExpr(Type type, std::vector<std::unique_ptr<Expression>> children);
   virtual ~ConjunctionExpr() = default;
 
   ExprType type() const override { return ExprType::CONJUNCTION; }
@@ -434,6 +462,16 @@ public:
       }
     }
     return RC::SUCCESS;
+  }
+  std::unique_ptr<Expression> deep_copy() const override
+  {
+    std::vector<std::unique_ptr<Expression>> new_children;
+    for (auto &child : children_) {
+      new_children.emplace_back(child->deep_copy());
+    }
+    auto new_expr = std::make_unique<ConjunctionExpr>(conjunction_type_, std::move(new_children));
+    new_expr->set_name(name());
+    return new_expr;
   }
 
 private:
@@ -499,6 +537,17 @@ public:
     }
     return RC::SUCCESS;
   }
+  std::unique_ptr<Expression> deep_copy() const override
+  {
+    std::unique_ptr<Expression> new_left = left_->deep_copy();
+    std::unique_ptr<Expression> new_right;
+    if (right_) {  // NOTE: not has_rhs
+      new_right = right_->deep_copy();
+    }
+    auto new_expr = std::make_unique<ArithmeticExpr>(arithmetic_type_, std::move(new_left), std::move(new_right));
+    new_expr->set_name(name());
+    return new_expr;
+  }
 
 private:
   RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
@@ -526,7 +575,7 @@ public:
 
   std::unique_ptr<Expression> &child() { return child_; }
 
-  RC       get_value(const Tuple &tuple, Value &value) const override { return RC::INTERNAL; }
+  RC       get_value(const Tuple &tuple, Value &value) const override;
   AttrType value_type() const override { return child_->value_type(); }
   RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
       Db *db, Expression *&res_expr, Table *default_table = nullptr)
@@ -543,6 +592,7 @@ public:
     }
     return rc;
   }
+  std::unique_ptr<Expression> deep_copy() const override { return nullptr; }
 
 private:
   std::string                 aggregate_name_;
@@ -588,6 +638,14 @@ public:
   RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
       Db *db, Expression *&res_expr, Table *default_table = nullptr)
   {
+    RC          rc    = RC::SUCCESS;
+    Expression *child = NULL;
+    if ((rc = child_->create_expression(table_map, tables, db, child, default_table)) != RC::SUCCESS)
+      return rc;
+    assert(child != NULL);
+    AggregateExpr *tmp = new AggregateExpr(aggregate_type(), child);
+    tmp->set_name(this->name());
+    res_expr = tmp;
     return RC::SUCCESS;
   }
   RC traverse_check(const std::function<RC(Expression *)> &func) override
@@ -599,6 +657,16 @@ public:
       return rc;
     }
     return rc;
+  }
+  std::unique_ptr<Expression> deep_copy() const override
+  {
+    std::unique_ptr<Expression> new_child;
+    if (child_) {
+      new_child = child_->deep_copy();
+    }
+    auto new_expr = std::make_unique<AggregateExpr>(aggregate_type_, std::move(new_child));
+    new_expr->set_name(name());
+    return new_expr;
   }
 
 public:

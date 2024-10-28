@@ -161,12 +161,40 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return rc;
     }
   }
+
+  FilterStmt *having_stmt = nullptr;
+  if (!select_sql.having_conditions.empty()) {
+    RC rc = FilterStmt::create(db,
+        default_table,
+        &table_map,
+        select_sql.having_conditions.data(),
+        static_cast<int>(select_sql.having_conditions.size()),
+        having_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
+  }
+  vector<unique_ptr<Expression>> having_bound_expression;
+  if (having_stmt != nullptr) {
+    auto filter_units = having_stmt->filter_units();
+    for (FilterUnit *unit : filter_units) {
+      unique_ptr<Expression> left  = unit->left().expr->deep_copy();
+      unique_ptr<Expression> right = unit->right().expr->deep_copy();
+      if (left->type() != ExprType::VALUE)
+        expression_binder.bind_expression(left, having_bound_expression);
+      if (right->type() != ExprType::VALUE)
+        expression_binder.bind_expression(right, having_bound_expression);
+    }
+  }
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->join_tables_.swap(join_tables);
   select_stmt->query_expressions_.swap(bound_expressions);
+  select_stmt->having_expressions_.swap(having_bound_expression);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
-  stmt = select_stmt;
+  select_stmt->having_stmt_ = having_stmt;
+  stmt                      = select_stmt;
   return RC::SUCCESS;
 }
 // {

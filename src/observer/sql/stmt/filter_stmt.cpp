@@ -62,6 +62,23 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     return RC::INVALID_ARGUMENT;
   }
 
+  auto check_field = [&](Expression *expr) {
+    if (expr->type() == ExprType::FIELD) {
+      FieldExpr *field_expr = static_cast<FieldExpr *>(expr);
+      return field_expr->check_field(*tables, {}, default_table, {});
+    }
+    return RC::SUCCESS;
+  };
+
+  if (rc = condition.left_expr->traverse_check(check_field); rc != RC::SUCCESS) {
+    LOG_WARN("filter_stmt check_field lhs expression error");
+    return rc;
+  }
+  if (rc = condition.right_expr->traverse_check(check_field); rc != RC::SUCCESS) {
+    LOG_WARN("filter_stmt check_field rhs expression error");
+    return rc;
+  }
+
   filter_unit = new FilterUnit;
   DEFER([&]() {
     if (RC::SUCCESS != rc && nullptr != filter_unit) {
@@ -69,36 +86,60 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       filter_unit = nullptr;
     }
   });
-
-  Expression                *left = nullptr;
-  const std::vector<Table *> table_arr;
-  rc = condition.left_expr->create_expression(*tables, table_arr, db, left, default_table);
-  if (rc != RC::SUCCESS) {
-    delete condition.left_expr;
-    delete condition.right_expr;
-    delete filter_unit;
-    LOG_WARN("filter_stmt create lhs expression error");
-    return rc;
-  }
-  Expression *right = nullptr;
-  rc                = condition.right_expr->create_expression(*tables, table_arr, db, right, default_table);
-  if (rc != RC::SUCCESS) {
-    delete condition.left_expr;
-    delete condition.right_expr;
-    delete filter_unit;
-    LOG_WARN("filter_stmt create rhs expression error");
-    return rc;
-  }
-  ASSERT(left!= nullptr,"filter_stmt create lhs expression error");
-  ASSERT(right!= nullptr,"filter_stmt create rhs expression error");
   FilterObj left_filter_obj, right_filter_obj;
-  left_filter_obj.expr  = left;
-  right_filter_obj.expr = right;
-  delete condition.left_expr;
-  delete condition.right_expr;
+  left_filter_obj.expr  = condition.left_expr;
+  right_filter_obj.expr = condition.right_expr;
   filter_unit->set_left(left_filter_obj);
   filter_unit->set_right(right_filter_obj);
   filter_unit->set_comp(comp);
-  // 检查两个类型是否能够比较
   return rc;
 }
+// {
+//   RC rc = RC::SUCCESS;
+
+//   CompOp comp = condition.comp;
+//   if (comp < EQUAL_TO || comp >= NO_OP) {
+//     LOG_WARN("invalid compare operator : %d", comp);
+//     return RC::INVALID_ARGUMENT;
+//   }
+
+//   filter_unit = new FilterUnit;
+//   DEFER([&]() {
+//     if (RC::SUCCESS != rc && nullptr != filter_unit) {
+//       delete filter_unit;
+//       filter_unit = nullptr;
+//     }
+//   });
+
+//   Expression                *left = nullptr;
+//   const std::vector<Table *> table_arr;
+//   rc = condition.left_expr->create_expression(*tables, table_arr, db, left, default_table);
+//   if (rc != RC::SUCCESS) {
+//     delete condition.left_expr;
+//     delete condition.right_expr;
+//     delete filter_unit;
+//     LOG_WARN("filter_stmt create lhs expression error");
+//     return rc;
+//   }
+//   Expression *right = nullptr;
+//   rc                = condition.right_expr->create_expression(*tables, table_arr, db, right, default_table);
+//   if (rc != RC::SUCCESS) {
+//     delete condition.left_expr;
+//     delete condition.right_expr;
+//     delete filter_unit;
+//     LOG_WARN("filter_stmt create rhs expression error");
+//     return rc;
+//   }
+//   ASSERT(left!= nullptr,"filter_stmt create lhs expression error");
+//   ASSERT(right!= nullptr,"filter_stmt create rhs expression error");
+//   FilterObj left_filter_obj, right_filter_obj;
+//   left_filter_obj.expr  = left;
+//   right_filter_obj.expr = right;
+//   delete condition.left_expr;
+//   delete condition.right_expr;
+//   filter_unit->set_left(left_filter_obj);
+//   filter_unit->set_right(right_filter_obj);
+//   filter_unit->set_comp(comp);
+//   // 检查两个类型是否能够比较
+//   return rc;
+// }

@@ -170,6 +170,21 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     top_oper = std::move(group_by_oper);
   }
 
+  if (select_stmt->having_stmt()) {
+    unique_ptr<LogicalOperator> predicate_oper;
+    RC                          rc = create_plan(select_stmt->having_stmt(), predicate_oper);
+
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    if (predicate_oper) {
+      predicate_oper->add_child(std::move(top_oper));
+      top_oper = std::move(predicate_oper);
+    }
+  }
+
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
   project_oper->add_child(std::move(top_oper));
   top_oper         = std::move(project_oper);
@@ -251,7 +266,7 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;
   if (!cmp_exprs.empty()) {
-    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
+    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, std::move(cmp_exprs)));
     predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
   }
 
@@ -349,8 +364,9 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
 {
   vector<unique_ptr<Expression>>             &group_by_expressions = select_stmt->group_by();
   vector<Expression *>                        aggregate_expressions;
-  vector<unique_ptr<Expression>>             &query_expressions = select_stmt->query_expressions();
-  function<RC(std::unique_ptr<Expression> &)> collector         = [&](unique_ptr<Expression> &expr) -> RC {
+  vector<unique_ptr<Expression>>             &query_expressions  = select_stmt->query_expressions();
+  vector<unique_ptr<Expression>>             &having_expressions = select_stmt->having_expressions();
+  function<RC(std::unique_ptr<Expression> &)> collector          = [&](unique_ptr<Expression> &expr) -> RC {
     RC rc = RC::SUCCESS;
     if (expr->type() == ExprType::AGGREGATION) {
       expr->set_pos(aggregate_expressions.size() + group_by_expressions.size());
@@ -395,13 +411,25 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
     bind_group_by_expr(expression);
   }
 
+  for (unique_ptr<Expression> &expression : having_expressions) {
+    bind_group_by_expr(expression);
+  }
+
   for (unique_ptr<Expression> &expression : query_expressions) {
+    find_unbound_column(expression);
+  }
+
+  for (unique_ptr<Expression> &expression : having_expressions) {
     find_unbound_column(expression);
   }
 
   // collect all aggregate expressions
   for (unique_ptr<Expression> &expression : query_expressions) {
     collector(expression);
+  }
+
+  for (unique_ptr<Expression> &Expression : having_expressions) {
+    collector(Expression);
   }
 
   if (group_by_expressions.empty() && aggregate_expressions.empty()) {
@@ -413,6 +441,9 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
     LOG_WARN("column must appear in the GROUP BY clause or must be part of an aggregate function");
     return RC::INVALID_ARGUMENT;
   }
+
+  if (aggregate_expressions.empty() && !having_expressions.empty())
+    return RC::INVALID_ARGUMENT;
 
   // 如果只需要聚合，但是没有group by 语句，需要生成一个空的group by 语句
 

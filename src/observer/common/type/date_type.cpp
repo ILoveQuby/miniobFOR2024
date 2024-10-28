@@ -12,18 +12,18 @@ int DateType::compare(const Value &left, const Value &right) const
 RC DateType::max(const Value &left, const Value &right, Value &result) const
 {
   if (compare(left, right) >= 0)
-    result.set_int(left.get_int());
+    result = left;
   else
-    result.set_int(right.get_int());
+    result = right;
   return RC::SUCCESS;
 }
 
 RC DateType::min(const Value &left, const Value &right, Value &result) const
 {
   if (compare(left, right) >= 0)
-    result.set_int(right.get_int());
+    result = right;
   else
-    result.set_int(left.get_int());
+    result = left;
   return RC::SUCCESS;
 }
 

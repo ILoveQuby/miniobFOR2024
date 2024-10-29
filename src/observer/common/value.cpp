@@ -249,7 +249,12 @@ string Value::to_string() const
 
 int Value::compare(const Value &other) const
 {
-  ASSERT(!this->is_null() && !other.is_null(), "Cound Not Be Null!");
+  if (this->is_null() && other.is_null())
+    return 0;
+  if (this->is_null())
+    return -1;
+  if (other.is_null())
+    return 1;
   if (this->attr_type_ == other.attr_type_)
     return DataType::type_instance(this->attr_type_)->compare(*this, other);
   else {

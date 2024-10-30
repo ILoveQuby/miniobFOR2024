@@ -126,6 +126,8 @@ NOT                                     RETURN_TOKEN(NOT);
 NULL                                    RETURN_TOKEN(NULL_T);
 INNER                                   RETURN_TOKEN(INNER);
 JOIN                                    RETURN_TOKEN(JOIN);
+IN                                      RETURN_TOKEN(IN);
+EXISTS                                  RETURN_TOKEN(EXISTS);
 MAX                                     yylval->string=strdup(yytext); RETURN_TOKEN(MAX);
 MIN                                     yylval->string=strdup(yytext); RETURN_TOKEN(MIN);
 SUM                                     yylval->string=strdup(yytext); RETURN_TOKEN(SUM);

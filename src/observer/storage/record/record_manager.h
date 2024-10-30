@@ -357,7 +357,7 @@ private:
 class RecordFileHandler
 {
 public:
-  RecordFileHandler(StorageFormat storage_format) : storage_format_(storage_format){};
+  RecordFileHandler(StorageFormat storage_format) : storage_format_(storage_format) {};
   ~RecordFileHandler();
 
   /**
@@ -449,7 +449,8 @@ public:
    *
    * @param record 返回的下一条记录
    */
-  RC next(Record &record);
+  RC   next(Record &record);
+  bool has_next();
 
   RC update_current(const Record &record);
 

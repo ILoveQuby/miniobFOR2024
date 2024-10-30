@@ -48,6 +48,7 @@ enum class ExprType
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
   AGGREGATION,  ///< 聚合运算
+  SUBQUERY,     ///< 子查询
 };
 
 /**
@@ -685,4 +686,47 @@ public:
 private:
   Type                        aggregate_type_;
   std::unique_ptr<Expression> child_;
+};
+
+class SelectStmt;
+class LogicalOperator;
+class PhysicalOperator;
+class SubQueryExpr : public Expression
+{
+public:
+  SubQueryExpr(SelectSqlNode &sql_node);
+  virtual ~SubQueryExpr();
+
+  RC   open(Trx *trx);
+  RC   close();
+  bool has_more_row(const Tuple &tuple) const;
+
+  RC get_value(const Tuple &tuple, Value &value) const;
+
+  RC try_get_value(Value &value) const;
+
+  ExprType type() const;
+
+  AttrType value_type() const;
+
+  std::unique_ptr<Expression> deep_copy() const;
+
+  const std::unique_ptr<SelectSqlNode>    &get_sql_node() const;
+  void                                     set_select_stmt(SelectStmt *stmt);
+  const std::unique_ptr<SelectStmt>       &get_select_stmt() const;
+  void                                     set_logical_oper(std::unique_ptr<LogicalOperator> &&oper);
+  const std::unique_ptr<LogicalOperator>  &get_logical_oper();
+  void                                     set_physical_oper(std::unique_ptr<PhysicalOperator> &&oper);
+  const std::unique_ptr<PhysicalOperator> &get_physical_oper();
+  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
+      Db *db, Expression *&res_expr, Table *default_table = nullptr)
+  {
+    return RC::SUCCESS;
+  }
+
+private:
+  std::unique_ptr<SelectSqlNode>    sql_node_;
+  std::unique_ptr<SelectStmt>       stmt_;
+  std::unique_ptr<LogicalOperator>  logical_oper_;
+  std::unique_ptr<PhysicalOperator> physical_oper_;
 };

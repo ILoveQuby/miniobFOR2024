@@ -254,13 +254,27 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   std::vector<unique_ptr<Expression>> cmp_exprs;
-  const std::vector<FilterUnit *>    &filter_units = filter_stmt->filter_units();
+  const std::vector<FilterUnit *>    &filter_units      = filter_stmt->filter_units();
+  auto                                process_sub_query = [this](unique_ptr<Expression> &expr) {
+    if (expr->type() == ExprType::SUBQUERY) {
+      SubQueryExpr               *sub_query_expr = static_cast<SubQueryExpr *>(expr.get());
+      unique_ptr<LogicalOperator> sub_query_logical_oper;
+      if (RC rc = create_plan(sub_query_expr->get_select_stmt().get(), sub_query_logical_oper); rc != RC::SUCCESS)
+        return rc;
+      sub_query_expr->set_logical_oper(move(sub_query_logical_oper));
+    }
+    return RC::SUCCESS;
+  };
   for (const FilterUnit *filter_unit : filter_units) {
     const FilterObj       &filter_obj_left  = filter_unit->left();
     const FilterObj       &filter_obj_right = filter_unit->right();
     unique_ptr<Expression> left(filter_obj_left.expr);
     unique_ptr<Expression> right(filter_obj_right.expr);
-    ComparisonExpr        *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
+    if (RC rc = process_sub_query(left); rc != RC::SUCCESS)
+      return rc;
+    if (RC rc = process_sub_query(right); rc != RC::SUCCESS)
+      return rc;
+    ComparisonExpr *cmp_expr = new ComparisonExpr(filter_unit->comp(), std::move(left), std::move(right));
     cmp_exprs.emplace_back(cmp_expr);
   }
 

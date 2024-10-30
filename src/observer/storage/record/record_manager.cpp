@@ -833,6 +833,8 @@ RC RecordFileScanner::close_scan()
   return RC::SUCCESS;
 }
 
+bool RecordFileScanner::has_next() { return next_record_.rid().slot_num != -1; }
+
 RC RecordFileScanner::next(Record &record)
 {
   RC rc = fetch_next_record();

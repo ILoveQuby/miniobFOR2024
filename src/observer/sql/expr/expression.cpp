@@ -15,6 +15,10 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
+#include "sql/stmt/select_stmt.h"
+#include "sql/operator/logical_operator.h"
+#include "sql/operator/physical_operator.h"
+#include "common/lang/defer.h"
 
 using namespace std;
 
@@ -188,20 +192,77 @@ RC ComparisonExpr::try_get_value(Value &cell) const
 
 RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 {
-  Value left_value;
-  Value right_value;
+  Value         left_value;
+  Value         right_value;
+  SubQueryExpr *left_sub_query  = nullptr;
+  SubQueryExpr *right_sub_query = nullptr;
+  DEFER([&left_sub_query, &right_sub_query]() {
+    if (left_sub_query != nullptr)
+      left_sub_query->close();
+    if (right_sub_query != nullptr)
+      right_sub_query->close();
+  });
 
-  RC rc = left_->get_value(tuple, left_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
-    return rc;
+  auto open_sub_query = [](const unique_ptr<Expression> &expr) {
+    SubQueryExpr *sub = nullptr;
+    if (expr->type() == ExprType::SUBQUERY) {
+      sub = static_cast<SubQueryExpr *>(expr.get());
+      sub->open(nullptr);
+    }
+    return sub;
+  };
+  left_sub_query  = open_sub_query(left_);
+  right_sub_query = open_sub_query(right_);
+  RC rc           = RC::SUCCESS;
+  if (comp_ == EXISTS_OP || comp_ == NOT_EXISTS_OP) {
+    rc = right_->get_value(tuple, right_value);
+    value.set_boolean(comp_ == EXISTS_OP ? rc == RC::SUCCESS : rc == RC::RECORD_EOF);
+    return rc == RC::RECORD_EOF ? RC::SUCCESS : rc;
   }
-  rc = right_->get_value(tuple, right_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
-    return rc;
+  if (left_sub_query) {
+    int left_count = 0;
+    while (RC::SUCCESS == (rc = left_->get_value(tuple, left_value)))
+      left_count++;
+    if (left_count > 1)
+      return RC::INVALID_ARGUMENT;
+  } else {
+    rc = left_->get_value(tuple, left_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+  if (comp_ == IN_OP || comp_ == NOT_IN_OP) {
+    if (left_value.is_null()) {
+      value.set_boolean(false);
+      return RC::SUCCESS;
+    }
+    bool res = false, has_null = false;
+    while (RC::SUCCESS == (rc = right_->get_value(tuple, right_value))) {
+      if (right_value.is_null())
+        has_null = true;
+      else if (left_value.compare(right_value) == 0)
+        res = true;
+    }
+    value.set_boolean(comp_ == IN_OP ? res : (has_null ? false : !res));
+    return rc == RC::RECORD_EOF ? RC::SUCCESS : rc;
   }
 
+  if (right_sub_query) {
+    int right_count = 0;
+    while (RC::SUCCESS == (rc = right_->get_value(tuple, right_value)))
+      right_count++;
+    if (right_count > 1) {
+      value.set_boolean(false);
+      return RC::SUCCESS;
+    }
+  } else {
+    rc = right_->get_value(tuple, right_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
   bool bool_value = false;
 
   rc = compare_value(left_value, right_value, bool_value);
@@ -764,3 +825,59 @@ RC FieldExpr::check_field(const std::unordered_map<std::string, Table *> &table_
   }
   return RC::SUCCESS;
 }
+
+SubQueryExpr::SubQueryExpr(SelectSqlNode &sql_node)
+{
+  sql_node_ = make_unique<SelectSqlNode>();
+  sql_node_->conditions.swap(sql_node.conditions);
+  sql_node_->expressions.swap(sql_node.expressions);
+  sql_node_->group_by.swap(sql_node.group_by);
+  sql_node_->having_conditions.swap(sql_node.having_conditions);
+  sql_node_->relations.swap(sql_node.relations);
+}
+
+SubQueryExpr::~SubQueryExpr() = default;
+
+// 子算子树的 open 和 close 逻辑由外部控制
+RC SubQueryExpr::open(Trx *trx) { return physical_oper_->open(trx); }
+
+RC SubQueryExpr::close() { return physical_oper_->close(); }
+
+bool SubQueryExpr::has_more_row(const Tuple &tuple) const
+{
+  // TODO(wbj) 这里没考虑其他错误
+  physical_oper_->set_parent_tuple(&tuple);
+  return physical_oper_->next() != RC::RECORD_EOF;
+}
+
+RC SubQueryExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  physical_oper_->set_parent_tuple(&tuple);
+  // 每次返回一行的第一个 cell
+  if (RC rc = physical_oper_->next(); RC::SUCCESS != rc) {
+    return rc;
+  }
+  return physical_oper_->current_tuple()->cell_at(0, value);
+}
+
+RC SubQueryExpr::try_get_value(Value &value) const { return RC::UNIMPLEMENTED; }
+
+ExprType SubQueryExpr::type() const { return ExprType::SUBQUERY; }
+
+AttrType SubQueryExpr::value_type() const { return AttrType::UNDEFINED; }
+
+std::unique_ptr<Expression> SubQueryExpr::deep_copy() const { return {}; }
+
+const std::unique_ptr<SelectSqlNode> &SubQueryExpr::get_sql_node() const { return sql_node_; }
+
+void SubQueryExpr::set_select_stmt(SelectStmt *stmt) { stmt_ = std::unique_ptr<SelectStmt>(stmt); }
+
+const std::unique_ptr<SelectStmt> &SubQueryExpr::get_select_stmt() const { return stmt_; }
+
+void SubQueryExpr::set_logical_oper(std::unique_ptr<LogicalOperator> &&oper) { logical_oper_ = std::move(oper); }
+
+const std::unique_ptr<LogicalOperator> &SubQueryExpr::get_logical_oper() { return logical_oper_; }
+
+void SubQueryExpr::set_physical_oper(std::unique_ptr<PhysicalOperator> &&oper) { physical_oper_ = std::move(oper); }
+
+const std::unique_ptr<PhysicalOperator> &SubQueryExpr::get_physical_oper() { return physical_oper_; }

@@ -131,9 +131,21 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
   // 看看是否有可以用于索引查找的表达式
   Table *table = table_get_oper.table();
 
-  Index     *index      = nullptr;
-  ValueExpr *value_expr = nullptr;
+  Index     *index             = nullptr;
+  ValueExpr *value_expr        = nullptr;
+  auto       process_sub_query = [this](Expression *expr) {
+    if (expr->type() == ExprType::SUBQUERY) {
+      SubQueryExpr                *sub_query_expr = static_cast<SubQueryExpr *>(expr);
+      unique_ptr<PhysicalOperator> sub_query_physical_oper;
+      if (RC rc = create(*(sub_query_expr->get_logical_oper().get()), sub_query_physical_oper); rc != RC::SUCCESS)
+        return rc;
+      sub_query_expr->set_physical_oper(move(sub_query_physical_oper));
+    }
+    return RC::SUCCESS;
+  };
   for (auto &expr : predicates) {
+    if (RC rc = expr->traverse_check(process_sub_query); rc != RC::SUCCESS)
+      return rc;
     if (expr->type() == ExprType::COMPARISON) {
       auto comparison_expr = static_cast<ComparisonExpr *>(expr.get());
       // 简单处理，就找等值查询
@@ -213,7 +225,18 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
   vector<unique_ptr<Expression>> &expressions = pred_oper.expressions();
   ASSERT(expressions.size() == 1, "predicate logical operator's children should be 1");
 
-  unique_ptr<Expression> expression = std::move(expressions.front());
+  unique_ptr<Expression> expression        = std::move(expressions.front());
+  auto                   process_sub_query = [this](Expression *expr) {
+    if (expr->type() == ExprType::SUBQUERY) {
+      SubQueryExpr                *sub_query_expr = static_cast<SubQueryExpr *>(expr);
+      unique_ptr<PhysicalOperator> sub_query_physical_oper;
+      if (RC rc = create(*(sub_query_expr->get_logical_oper().get()), sub_query_physical_oper); rc != RC::SUCCESS)
+        return rc;
+      sub_query_expr->set_physical_oper(move(sub_query_physical_oper));
+    }
+    return RC::SUCCESS;
+  };
+  expression->traverse_check(process_sub_query);
   oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(expression)));
   oper->add_child(std::move(child_phy_oper));
   return rc;

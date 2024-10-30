@@ -31,7 +31,7 @@ SelectStmt::~SelectStmt()
   }
 }
 
-RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
+RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_map<string, Table *> parent_table_map)
 {
   if (nullptr == db) {
     LOG_WARN("invalid argument, db is null.");
@@ -39,7 +39,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   }
   BinderContext                  binder_context;
   vector<Table *>                tables;
-  unordered_map<string, Table *> table_map;
+  unordered_map<string, Table *> table_map = parent_table_map;
   unordered_map<string, Table *> local_table_map;
   vector<JoinTables>             join_tables;
 

@@ -116,11 +116,13 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         NE
         LIKE
         IS
+        IN
         NOT
         NULL_T
         INNER
         JOIN
         HAVING
+        EXISTS
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -162,6 +164,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <value>               value
 %type <number>              number
 %type <comp>                comp_op
+%type <comp>                exists_op
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
@@ -171,6 +174,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type<expression_list>      select_attr
 %type <string>              storage_format
 %type <string>              aggregate_type
+%type <expression>          sub_query_expr
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type<inner_joins>          join_list
@@ -688,7 +692,18 @@ expression:
     | aggregate_type LBRACE RBRACE {
       $$ = create_aggregate_expression("MAX", new StarExpr(), sql_string, &@$);
     }
+    | sub_query_expr {
+      $$ = $1;
+    }
     // your code here
+    ;
+
+sub_query_expr:
+    LBRACE select_stmt RBRACE
+    {
+      $$ = new SubQueryExpr($2->selection);
+      delete $2;
+    }
     ;
 
 aggregate_type:
@@ -792,6 +807,15 @@ condition:
       val.set_null();
       $$->right_expr = new ValueExpr(val);
     }
+    | exists_op expression 
+    {
+      $$ = new ConditionSqlNode;
+      Value val;
+      val.set_null();
+      $$->left_expr = new ValueExpr(val);
+      $$->right_expr = $2;
+      $$->comp = $1;
+    }
     ;
 
 comp_op:
@@ -803,6 +827,13 @@ comp_op:
     | NE { $$ = NOT_EQUAL; }
     | LIKE { $$ = LIKE_OP; }
     | NOT LIKE { $$ = NOT_LIKE_OP; }
+    | IN { $$ = IN_OP; }
+    | NOT IN { $$ = NOT_IN_OP; }
+    ;
+
+exists_op:
+    EXISTS { $$ = EXISTS_OP; }
+    | NOT EXISTS { $$ = NOT_EXISTS_OP; }
     ;
 
 // your code here

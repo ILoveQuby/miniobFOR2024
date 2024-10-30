@@ -13,6 +13,7 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/select_stmt.h"
 #include "common/lang/defer.h"
 #include "common/lang/string.h"
 #include "common/log/log.h"
@@ -66,6 +67,19 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
     if (expr->type() == ExprType::FIELD) {
       FieldExpr *field_expr = static_cast<FieldExpr *>(expr);
       return field_expr->check_field(*tables, {}, default_table, {});
+    }
+    if (expr->type() == ExprType::SUBQUERY) {
+      SubQueryExpr *sub_query_expr = static_cast<SubQueryExpr *>(expr);
+      Stmt         *stmt           = nullptr;
+      if (RC rc = SelectStmt::create(db, *sub_query_expr->get_sql_node(), stmt, *tables); rc != RC::SUCCESS)
+        return rc;
+      if (stmt->type() != StmtType::SELECT)
+        return RC::INVALID_ARGUMENT;
+      SelectStmt *select_stmt = static_cast<SelectStmt *>(stmt);
+      if (select_stmt->query_expressions().size() > 1)
+        return RC::INVALID_ARGUMENT;
+      sub_query_expr->set_select_stmt(select_stmt);
+      return RC::SUCCESS;
     }
     return RC::SUCCESS;
   };

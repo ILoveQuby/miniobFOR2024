@@ -48,7 +48,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     return RC::INVALID_ARGUMENT;
   if (!update_field->nullable() && update.value.is_null())
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-  if (update_field->type() != update.value.attr_type()) {
+  if (!update.value.is_null() && update_field->type() != update.value.attr_type()) {
     LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
             table->name(), update_field->name(), update_field->type(), update.value.attr_type());
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;

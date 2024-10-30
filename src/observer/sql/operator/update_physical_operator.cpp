@@ -47,31 +47,6 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
   child->close();
 
-  // 先收集记录再更新
-  // 记录的有效性由事务来保证，如果事务不保证删除的有效性，那说明此事务类型不支持并发控制，比如VacuousTrx
-  //   for (Record &record : records_) {
-  //     char *data = record.data();
-  //     switch (fields_.type()) {
-  //       case AttrType::CHARS: {
-  //         *(data + fields_.offset()) = *(char *)values_;
-  //       } break;
-  //       case AttrType::INTS: {
-  //         *(int *)(data + fields_.offset()) = *(int *)values_;
-  //       } break;
-  //       case AttrType::FLOATS: {
-  //         *(float *)(data + fields_.offset()) = *(float *)values_;
-  //       } break;
-  //       case AttrType::BOOLEANS: {
-  //         *(bool *)(data + fields_.offset()) = *(bool *)values_;
-  //       } break;
-  //       case AttrType::DATES: {
-  //         *(int *)(data + fields_.offset()) = *(int *)values_;
-  //       } break;
-  //       default: {
-  //         return rc;
-  //       }
-  //     }
-  //   }
   for (Record &record : records_) {
     rc = trx_->update_record(table_, record, values_, fields_);
     if (rc != RC::SUCCESS) {

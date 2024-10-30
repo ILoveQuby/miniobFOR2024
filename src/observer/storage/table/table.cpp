@@ -511,21 +511,19 @@ RC Table::delete_record(const Record &record)
 
 RC Table::update_record(Record &record, Value *values, FieldMeta fields)
 {
-  RC rc = RC::SUCCESS;
-  for (Index *index : indexes_) {
-    rc = index->delete_entry(record.data(), &record.rid());
-    ASSERT(RC::SUCCESS == rc, 
-           "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
-           name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
-  }
-  record_handler_->delete_record(&record.rid());
+  RC               rc         = RC::SUCCESS;
   const FieldMeta *null_field = table_meta_.null_field();
   common::Bitmap   bit_map(record.data() + null_field->offset(), null_field->len());
   for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
     const FieldMeta *cur_field = table_meta_.field(i);
     if (strcmp(fields.name(), cur_field->name()) == 0) {
-      if ((values->is_null() && !cur_field->nullable()) || values->attr_type() != cur_field->type())
-        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      if (values->is_null()) {
+        if (!cur_field->nullable())
+          return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      } else {
+        if (values->attr_type() != cur_field->type())
+          return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
       if (values->is_null())
         bit_map.set_bit(i);
       else {
@@ -535,6 +533,14 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
       break;
     }
   }
+
+  for (Index *index : indexes_) {
+    rc = index->delete_entry(record.data(), &record.rid());
+    ASSERT(RC::SUCCESS == rc, 
+           "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
+           name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
+  }
+  record_handler_->delete_record(&record.rid());
   for (Index *index : indexes_) {
     rc = index->insert_entry(record.data(), &record.rid());
     ASSERT(RC::SUCCESS == rc, 

@@ -70,6 +70,8 @@ RC AvgAggregator::accumulate(const Value &value)
 {
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
+    if (!value_.is_null())
+      cnt_++;
     return RC::SUCCESS;
   }
   if (!value.is_null()) {
@@ -93,6 +95,8 @@ RC CountAggregator::accumulate(const Value &value)
 {
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
+    if (!value_.is_null())
+      cnt_++;
     return RC::SUCCESS;
   }
   if (!value.is_null())
@@ -110,6 +114,7 @@ RC CountStarAggregator::accumulate(const Value &value)
 {
   if (value_.attr_type() == AttrType::UNDEFINED) {
     value_ = value;
+    cnt_++;
     return RC::SUCCESS;
   }
 

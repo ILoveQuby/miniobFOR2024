@@ -60,10 +60,6 @@ RC GroupByPhysicalOperator::aggregate(AggregatorList &aggregator_list, const Tup
       LOG_WARN("failed to get value from expression. rc=%s", strrc(rc));
       return rc;
     }
-    if (!value.is_null() && !aggregator->is_init()) {
-      aggregator->init();
-      aggregator->init_cnt();
-    }
     rc = aggregator->accumulate(value);
     if (OB_FAIL(rc)) {
       LOG_WARN("failed to accumulate value. rc=%s", strrc(rc));

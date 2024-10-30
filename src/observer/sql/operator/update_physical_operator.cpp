@@ -46,30 +46,31 @@ RC UpdatePhysicalOperator::open(Trx *trx)
   }
 
   child->close();
+  for (size_t i = 0; i < fields_.size(); i++) {
+    Value      values;
+    EmptyTuple tp;
+    if (values_[i]->type() == ExprType::SUBQUERY) {
+      SubQueryExpr *sub_query_expr = static_cast<SubQueryExpr *>(values_[i].get());
+      rc                           = sub_query_expr->open(nullptr);
+      if (rc != RC::SUCCESS)
+        return rc;
+      int val_count = 0;
+      while (RC::SUCCESS == (rc = sub_query_expr->get_value(tp, values)))
+        val_count++;
+      if (val_count == 0)
+        values.set_null();
+      else if (val_count > 1)
+        return RC::INVALID_ARGUMENT;
+      sub_query_expr->close();
+    } else
+      values_[i]->get_value(tp, values);
 
-  Value      values;
-  EmptyTuple tp;
-  if (values_->type() == ExprType::SUBQUERY) {
-    SubQueryExpr *sub_query_expr = static_cast<SubQueryExpr *>(values_.get());
-    rc                           = sub_query_expr->open(nullptr);
-    if (rc != RC::SUCCESS)
-      return rc;
-    int val_count = 0;
-    while (RC::SUCCESS == (rc = sub_query_expr->get_value(tp, values)))
-      val_count++;
-    if (val_count == 0)
-      values.set_null();
-    else if (val_count > 1)
-      return RC::INVALID_ARGUMENT;
-    sub_query_expr->close();
-  } else
-    values_->get_value(tp, values);
-
-  for (Record &record : records_) {
-    rc = trx_->update_record(table_, record, &values, fields_);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to delete record: %s", strrc(rc));
-      return rc;
+    for (Record &record : records_) {
+      rc = trx_->update_record(table_, record, &values, fields_[i]);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to delete record: %s", strrc(rc));
+        return rc;
+      }
     }
   }
   return RC::SUCCESS;

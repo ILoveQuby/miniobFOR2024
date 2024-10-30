@@ -26,7 +26,7 @@ class UpdateStmt;
 class UpdatePhysicalOperator : public PhysicalOperator
 {
 public:
-  UpdatePhysicalOperator(Table *table, std::unique_ptr<Expression> values, FieldMeta fields)
+  UpdatePhysicalOperator(Table *table, std::vector<std::unique_ptr<Expression>> values, std::vector<FieldMeta> fields)
       : table_(table), values_(std::move(values)), fields_(fields)
   {}
 
@@ -41,10 +41,10 @@ public:
   Tuple *current_tuple() override { return nullptr; }
 
 private:
-  Table                      *table_  = nullptr;
-  std::unique_ptr<Expression> values_ = nullptr;
-  FieldMeta                   fields_;
-  Trx                        *trx_ = nullptr;
-  std::vector<Record>         records_;
-  bool                        invaild_ = false;
+  Table                                   *table_ = nullptr;
+  std::vector<std::unique_ptr<Expression>> values_;
+  std::vector<FieldMeta>                   fields_;
+  Trx                                     *trx_ = nullptr;
+  std::vector<Record>                      records_;
+  bool                                     invaild_ = false;
 };

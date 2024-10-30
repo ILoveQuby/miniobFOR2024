@@ -29,7 +29,8 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, std::unique_ptr<Expression> values, FieldMeta fields, FilterStmt *filter_stmt);
+  UpdateStmt(Table *table, std::vector<FieldMeta> fields, std::vector<std::unique_ptr<Expression>> &&values,
+      FilterStmt *filter_stmt);
   ~UpdateStmt() override;
   StmtType type() const override { return StmtType::UPDATE; }
 
@@ -37,14 +38,14 @@ public:
   static RC create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt);
 
 public:
-  Table                       *table() const { return table_; }
-  std::unique_ptr<Expression> &values() { return values_; }
-  FieldMeta                    fields() const { return fields_; }
-  FilterStmt                  *filter_stmt() const { return filter_stmt_; }
+  Table                                    *table() const { return table_; }
+  std::vector<std::unique_ptr<Expression>> &values() { return values_; }
+  std::vector<FieldMeta>                   &update_fields() { return fields_; }
+  FilterStmt                               *filter_stmt() const { return filter_stmt_; }
 
 private:
-  Table                      *table_  = nullptr;
-  std::unique_ptr<Expression> values_ = nullptr;
-  FieldMeta                   fields_;
-  FilterStmt                 *filter_stmt_ = nullptr;
+  Table                                   *table_ = nullptr;
+  std::vector<std::unique_ptr<Expression>> values_;
+  std::vector<FieldMeta>                   fields_;
+  FilterStmt                              *filter_stmt_ = nullptr;
 };

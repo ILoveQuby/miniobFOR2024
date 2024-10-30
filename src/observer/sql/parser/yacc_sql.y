@@ -136,6 +136,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
+  UpdateKv *                                 update_kv;
+  std::vector<UpdateKv> *                    update_kv_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
@@ -177,6 +179,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression>          sub_query_expr
 %type <expression>          expression
 %type <expression_list>     expression_list
+%type <update_kv_list>      update_kv_list
+%type <update_kv>           update_kv
 %type<inner_joins>          join_list
 %type<inner_joins>          from_node
 %type<inner_joins_list>     from_list
@@ -518,18 +522,52 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ expression where 
+    UPDATE ID SET update_kv update_kv_list where 
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = $6;
-      if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
+      $$->update.attribute_names.emplace_back($4->attribute_name);
+      $$->update.values.emplace_back($4->value);
+      if($5 != nullptr) {
+        for(UpdateKv kv : *$5) {
+          $$->update.attribute_names.emplace_back(kv.attribute_name);
+          $$->update.values.emplace_back(kv.value);
+        }
+        delete $5;
+      }
+      if($6 != nullptr) {
+        $$->update.conditions.swap(*$6);
+        delete $6;
       }
       free($2);
-      free($4);
+      delete $4;
+    }
+    ;
+
+update_kv_list:
+    /* empty */ 
+    {
+      $$ = nullptr;
+    }
+    | COMMA update_kv update_kv_list 
+    {
+      if($3 != nullptr) {
+        $$ = $3;
+      } else {
+        $$ = new std::vector<UpdateKv>;
+      }
+      $$->emplace_back(*$2);
+      delete $2;
+    }
+    ;
+
+update_kv:
+    ID EQ expression
+    {
+      $$ = new UpdateKv;
+      $$->attribute_name = $1;
+      $$->value = $3;
+      free($1);
     }
     ;
 

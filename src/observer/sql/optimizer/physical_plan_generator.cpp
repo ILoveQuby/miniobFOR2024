@@ -415,9 +415,11 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, std::u
     }
     return RC::SUCCESS;
   };
-  rc = update_oper.values()->traverse_check(process_sub_query);
-  if (rc != RC::SUCCESS)
-    return rc;
+  for (auto &value : update_oper.values()) {
+    rc = value->traverse_check(process_sub_query);
+    if (rc != RC::SUCCESS)
+      return rc;
+  }
   oper = unique_ptr<PhysicalOperator>(
       new UpdatePhysicalOperator(update_oper.table(), std::move(update_oper.values()), update_oper.fields()));
   if (child_physical_oper) {

@@ -151,11 +151,16 @@ struct DeleteSqlNode
  * @brief 描述一个update语句
  * @ingroup SQLParser
  */
+struct UpdateKv
+{
+  std::string attribute_name;
+  Expression *value = nullptr;
+};
 struct UpdateSqlNode
 {
-  std::string                   relation_name;   ///< Relation to update
-  std::string                   attribute_name;  ///< 更新的字段，仅支持一个字段
-  Expression                   *value;           ///< 更新的值，仅支持一个字段
+  std::string                   relation_name;    ///< Relation to update
+  std::vector<std::string>      attribute_names;  ///< 更新的字段，仅支持一个字段
+  std::vector<Expression *>     values;           ///< 更新的值，仅支持一个字段
   std::vector<ConditionSqlNode> conditions;
 };
 

@@ -49,6 +49,7 @@ enum class ExprType
   ARITHMETIC,   ///< 算术运算
   AGGREGATION,  ///< 聚合运算
   SUBQUERY,     ///< 子查询
+  LIST,
 };
 
 /**
@@ -89,9 +90,6 @@ public:
    * @brief 从 `chunk` 中获取表达式的计算结果 `column`
    */
   virtual RC get_column(Chunk &chunk, Column &column) { return RC::UNIMPLEMENTED; }
-
-  virtual RC create_expression(const std::unordered_map<std::string, Table *> &table_map,
-      const std::vector<Table *> &tables, Db *db, Expression *&res_expr, Table *default_table = nullptr) = 0;
 
   virtual RC traverse_check(const std::function<RC(Expression *)> &func) { return func(this); }
 
@@ -154,11 +152,6 @@ public:
   AttrType value_type() const override { return AttrType::UNDEFINED; }
 
   RC get_value(const Tuple &tuple, Value &value) const override { return RC::UNIMPLEMENTED; }  // 不需要实现
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    return RC::SUCCESS;
-  }
 
   const char            *table_name() const { return table_name_.c_str(); }
   unique_ptr<Expression> deep_copy() const override { return unique_ptr<StarExpr>(new StarExpr(*this)); }
@@ -180,11 +173,6 @@ public:
   AttrType value_type() const override { return AttrType::UNDEFINED; }
 
   RC get_value(const Tuple &tuple, Value &value) const override { return RC::INTERNAL; }
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    return RC::SUCCESS;
-  }
 
   const char                 *table_name() const { return table_name_.c_str(); }
   const char                 *field_name() const { return field_name_.c_str(); }
@@ -236,9 +224,6 @@ public:
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr) override;
-
   RC check_field(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
       Table *default_table = nullptr, const std::unordered_map<std::string, std::string> &table_alias_map = {});
 
@@ -279,14 +264,6 @@ public:
   void         get_value(Value &value) const { value = value_; }
   const Value &get_value() const { return value_; }
 
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    ValueExpr *tmp_expr = new ValueExpr(get_value());
-    tmp_expr->set_name(this->name());
-    res_expr = tmp_expr;
-    return RC::SUCCESS;
-  }
   std::unique_ptr<Expression> deep_copy() const override { return std::unique_ptr<ValueExpr>(new ValueExpr(*this)); }
 
 private:
@@ -313,14 +290,6 @@ public:
 
   std::unique_ptr<Expression> &child() { return child_; }
 
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    CastExpr *tmp = new CastExpr(std::move(child_), cast_type_);
-    tmp->set_name(this->name());
-    res_expr = tmp;
-    return RC::SUCCESS;
-  }
   RC traverse_check(const std::function<RC(Expression *)> &func) override
   {
     if (RC rc = func(this); RC::SUCCESS != rc) {
@@ -384,11 +353,6 @@ public:
   template <typename T>
   RC compare_column(const Column &left, const Column &right, std::vector<uint8_t> &result) const;
 
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    return RC::SUCCESS;
-  }
   RC traverse_check(const std::function<RC(Expression *)> &func) override
   {
     RC rc = RC::SUCCESS;
@@ -446,11 +410,6 @@ public:
 
   std::vector<std::unique_ptr<Expression>> &children() { return children_; }
 
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    return RC::SUCCESS;
-  }
   RC traverse_check(const std::function<RC(Expression *)> &func) override
   {
     RC rc = RC::SUCCESS;
@@ -524,8 +483,6 @@ public:
   std::unique_ptr<Expression> &left() { return left_; }
   std::unique_ptr<Expression> &right() { return right_; }
 
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr) override;
   RC traverse_check(const std::function<RC(Expression *)> &func) override
   {
     RC rc = RC::SUCCESS;
@@ -579,12 +536,7 @@ public:
 
   RC       get_value(const Tuple &tuple, Value &value) const override;
   AttrType value_type() const override { return child_->value_type(); }
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    return RC::SUCCESS;
-  }
-  RC traverse_check(const std::function<RC(Expression *)> &func) override
+  RC       traverse_check(const std::function<RC(Expression *)> &func) override
   {
     RC rc = RC::SUCCESS;
     if (RC::SUCCESS != (rc = func(this))) {
@@ -646,19 +598,6 @@ public:
 
   std::unique_ptr<Aggregator> create_aggregator() const;
 
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    RC          rc    = RC::SUCCESS;
-    Expression *child = NULL;
-    if ((rc = child_->create_expression(table_map, tables, db, child, default_table)) != RC::SUCCESS)
-      return rc;
-    assert(child != NULL);
-    AggregateExpr *tmp = new AggregateExpr(aggregate_type(), child);
-    tmp->set_name(this->name());
-    res_expr = tmp;
-    return RC::SUCCESS;
-  }
   RC traverse_check(const std::function<RC(Expression *)> &func) override
   {
     RC rc = RC::SUCCESS;
@@ -718,15 +657,69 @@ public:
   const std::unique_ptr<LogicalOperator>  &get_logical_oper();
   void                                     set_physical_oper(std::unique_ptr<PhysicalOperator> &&oper);
   const std::unique_ptr<PhysicalOperator> &get_physical_oper();
-  RC create_expression(const std::unordered_map<std::string, Table *> &table_map, const std::vector<Table *> &tables,
-      Db *db, Expression *&res_expr, Table *default_table = nullptr)
-  {
-    return RC::SUCCESS;
-  }
 
 private:
   std::unique_ptr<SelectSqlNode>    sql_node_;
   std::unique_ptr<SelectStmt>       stmt_;
   std::unique_ptr<LogicalOperator>  logical_oper_;
   std::unique_ptr<PhysicalOperator> physical_oper_;
+};
+
+class ListExpr : public Expression
+{
+public:
+  ListExpr(std::vector<Expression *> &&exprs)
+  {
+    for (auto expr : exprs) {
+      exprs_.emplace_back(expr);
+    }
+    exprs.clear();
+  }
+  ListExpr(std::vector<std::unique_ptr<Expression>> &&exprs) : exprs_(std::move(exprs)) {}
+  virtual ~ListExpr() = default;
+
+  void reset() { cur_idx_ = 0; }
+
+  RC get_value(const Tuple &tuple, Value &value) const override
+  {
+    if (cur_idx_ >= static_cast<int>(exprs_.size())) {
+      return RC::RECORD_EOF;
+    }
+    return exprs_[const_cast<int &>(cur_idx_)++]->get_value(tuple, value);
+  }
+
+  RC try_get_value(Value &value) const override { return RC::UNIMPLEMENTED; }
+
+  ExprType type() const override { return ExprType::LIST; }
+
+  AttrType value_type() const override { return AttrType::UNDEFINED; }
+
+  RC traverse_check(const std::function<RC(Expression *)> &check_func) override
+  {
+    RC rc = RC::SUCCESS;
+    for (auto &expr : exprs_) {
+      if (RC::SUCCESS != (rc = expr->traverse_check(check_func))) {
+        return rc;
+      }
+    }
+    if (RC::SUCCESS != (rc = check_func(this))) {
+      return rc;
+    }
+    return RC::SUCCESS;
+  }
+
+  std::unique_ptr<Expression> deep_copy() const override
+  {
+    std::vector<std::unique_ptr<Expression>> new_children;
+    for (auto &expr : exprs_) {
+      new_children.emplace_back(expr->deep_copy());
+    }
+    auto new_expr = std::make_unique<ListExpr>(std::move(new_children));
+    new_expr->set_name(name());
+    return new_expr;
+  }
+
+private:
+  int                                      cur_idx_ = 0;
+  std::vector<std::unique_ptr<Expression>> exprs_;
 };

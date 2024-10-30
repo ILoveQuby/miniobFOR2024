@@ -82,7 +82,10 @@ RC AvgAggregator::accumulate(const Value &value)
 RC AvgAggregator::evaluate(Value &result)
 {
   float val = value_.get_float();
-  result    = Value(val / cnt_);
+  if (cnt_ > 0)
+    result = Value(val / cnt_);
+  else
+    result.set_null();
   return RC::SUCCESS;
 }
 

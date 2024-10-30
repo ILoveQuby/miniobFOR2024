@@ -253,8 +253,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     while (RC::SUCCESS == (rc = right_->get_value(tuple, right_value)))
       right_count++;
     if (right_count > 1) {
-      value.set_boolean(false);
-      return RC::SUCCESS;
+      return RC::INVALID_ARGUMENT;
     }
   } else {
     rc = right_->get_value(tuple, right_value);

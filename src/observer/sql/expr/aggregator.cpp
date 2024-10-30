@@ -95,7 +95,6 @@ RC CountAggregator::accumulate(const Value &value)
     value_ = value;
     return RC::SUCCESS;
   }
-
   if (!value.is_null())
     cnt_++;
   return RC::SUCCESS;

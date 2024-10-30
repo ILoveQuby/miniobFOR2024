@@ -24,12 +24,15 @@ public:
 
   virtual RC accumulate(const Value &value) = 0;
   virtual RC evaluate(Value &result)        = 0;
-  bool       is_init() { return cnt_ > 0; }
-  void       init() { cnt_ = 1; }
+  void       init() { init_ = true; }
+  bool       is_init() { return init_; }
+  void       init_cnt() { cnt_ = value_.is_null() ? 0 : 1; }
+  Value      value() { return value_; }
 
 protected:
   Value value_;
-  int   cnt_ = 0;
+  int   cnt_  = 0;
+  bool  init_ = false;
 };
 
 class SumAggregator : public Aggregator

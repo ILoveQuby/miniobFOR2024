@@ -353,7 +353,6 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
 {
   Table                      *table       = update_stmt->table();
   FilterStmt                 *filter_stmt = update_stmt->filter_stmt();
-  Value                      *values      = update_stmt->values();
   FieldMeta                   fields      = update_stmt->fields();
   unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
   unique_ptr<LogicalOperator> predicate_oper;
@@ -361,7 +360,21 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   RC rc = create_plan(filter_stmt, predicate_oper);
   if (rc != RC::SUCCESS)
     return rc;
-  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, values, fields));
+
+  auto process_sub_query = [this](unique_ptr<Expression> &expr) {
+    if (expr->type() == ExprType::SUBQUERY) {
+      SubQueryExpr               *sub_query_expr = static_cast<SubQueryExpr *>(expr.get());
+      unique_ptr<LogicalOperator> sub_query_logical_oper;
+      if (RC rc = create_plan(sub_query_expr->get_select_stmt().get(), sub_query_logical_oper); rc != RC::SUCCESS)
+        return rc;
+      sub_query_expr->set_logical_oper(move(sub_query_logical_oper));
+    }
+    return RC::SUCCESS;
+  };
+  rc = process_sub_query(update_stmt->values());
+  if (rc != RC::SUCCESS)
+    return rc;
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, std::move(update_stmt->values()), fields));
 
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));

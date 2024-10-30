@@ -458,3 +458,20 @@ private:
   Tuple *left_  = nullptr;
   Tuple *right_ = nullptr;
 };
+
+class EmptyTuple : public Tuple
+{
+public:
+  EmptyTuple()          = default;
+  virtual ~EmptyTuple() = default;
+
+  int cell_num() const { return 0; }
+
+  RC cell_at(int index, Value &cell) const { return RC::INVALID_ARGUMENT; }
+
+  RC find_cell(const TupleCellSpec &spec, Value &cell, int &index) const { return RC::INVALID_ARGUMENT; }
+
+  RC spec_at(int index, TupleCellSpec &spec) const { return RC::INVALID_ARGUMENT; }
+
+  RC find_cell(const TupleCellSpec &spec, Value &value) const { return RC::INVALID_ARGUMENT; }
+};

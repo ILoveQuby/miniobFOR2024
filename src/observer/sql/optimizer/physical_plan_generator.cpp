@@ -405,8 +405,21 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, std::u
       return rc;
     }
   }
+  auto process_sub_query = [this](Expression *expr) {
+    if (expr->type() == ExprType::SUBQUERY) {
+      SubQueryExpr                *sub_query_expr = static_cast<SubQueryExpr *>(expr);
+      unique_ptr<PhysicalOperator> sub_query_physical_oper;
+      if (RC rc = create(*(sub_query_expr->get_logical_oper().get()), sub_query_physical_oper); rc != RC::SUCCESS)
+        return rc;
+      sub_query_expr->set_physical_oper(move(sub_query_physical_oper));
+    }
+    return RC::SUCCESS;
+  };
+  rc = update_oper.values()->traverse_check(process_sub_query);
+  if (rc != RC::SUCCESS)
+    return rc;
   oper = unique_ptr<PhysicalOperator>(
-      new UpdatePhysicalOperator(update_oper.table(), update_oper.values(), update_oper.fields()));
+      new UpdatePhysicalOperator(update_oper.table(), std::move(update_oper.values()), update_oper.fields()));
   if (child_physical_oper) {
     oper->add_child(std::move(child_physical_oper));
   }

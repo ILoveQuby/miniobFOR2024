@@ -18,8 +18,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include "sql/stmt/select_stmt.h"
 
-UpdateStmt::UpdateStmt(Table *table, Value *values, FieldMeta fields, FilterStmt *filter_stmt)
-    : table_(table), values_(values), fields_(fields), filter_stmt_(filter_stmt)
+UpdateStmt::UpdateStmt(Table *table, std::unique_ptr<Expression> values, FieldMeta fields, FilterStmt *filter_stmt)
+    : table_(table), values_(std::move(values)), fields_(fields), filter_stmt_(filter_stmt)
 {}
 
 UpdateStmt::~UpdateStmt()
@@ -46,13 +46,38 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   const FieldMeta *update_field = table_meta.field(update.attribute_name.c_str());
   if (update_field == nullptr)
     return RC::INVALID_ARGUMENT;
-  if (!update_field->nullable() && update.value.is_null())
-    return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-  if (!update.value.is_null() && update_field->type() != update.value.attr_type()) {
-    LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
-            table->name(), update_field->name(), update_field->type(), update.value.attr_type());
-    return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  auto check_field = [&](Expression *expr) {
+    if (expr->type() == ExprType::SUBQUERY) {
+      SubQueryExpr *sub_query_expr = static_cast<SubQueryExpr *>(expr);
+      Stmt         *stmt           = nullptr;
+      if (RC rc = SelectStmt::create(db, *sub_query_expr->get_sql_node(), stmt, {}); rc != RC::SUCCESS)
+        return rc;
+      if (stmt->type() != StmtType::SELECT)
+        return RC::INVALID_ARGUMENT;
+      SelectStmt *select_stmt = static_cast<SelectStmt *>(stmt);
+      if (select_stmt->query_expressions().size() > 1)
+        return RC::INVALID_ARGUMENT;
+      sub_query_expr->set_select_stmt(select_stmt);
+      return RC::SUCCESS;
+    }
+    return RC::SUCCESS;
+  };
+
+  if (update.value->type() == ExprType::VALUE) {
+    const Value &val = static_cast<ValueExpr *>(update.value)->get_value();
+    if (val.is_null()) {
+      if (!update_field->nullable())
+        return RC::INVALID_ARGUMENT;
+    } else {
+      if (val.attr_type() != update_field->type())
+        return RC::INVALID_ARGUMENT;
+    }
+  } else {
+    RC rc = update.value->traverse_check(check_field);
+    if (rc != RC::SUCCESS)
+      return rc;
   }
+
   std::unordered_map<std::string, Table *> table_map;
   table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
 
@@ -63,6 +88,6 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     LOG_WARN("cannot construct filter stmt");
     return rc;
   }
-  stmt = new UpdateStmt(table, const_cast<Value *>(&update.value), *update_field, filter_stmt);
+  stmt = new UpdateStmt(table, static_cast<std::unique_ptr<Expression>>(update.value), *update_field, filter_stmt);
   return RC::SUCCESS;
 }

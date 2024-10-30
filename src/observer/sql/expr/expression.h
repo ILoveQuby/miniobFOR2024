@@ -668,6 +668,19 @@ private:
 class ListExpr : public Expression
 {
 public:
+  ListExpr(Expression *expression, std::vector<Expression *> &&exprs)
+  {
+    exprs_.emplace_back(expression);
+    for (auto expr : exprs) {
+      exprs_.emplace_back(expr);
+    }
+    exprs.clear();
+  }
+  ListExpr(Expression *expression, std::vector<std::unique_ptr<Expression>> &&exprs)
+  {
+    exprs_ = std::move(exprs);
+    exprs_.emplace(exprs_.begin(), expression);
+  }
   ListExpr(std::vector<Expression *> &&exprs)
   {
     for (auto expr : exprs) {

@@ -50,6 +50,7 @@ protected:
 
   /// @brief 所有tuple聚合结束后，运算最终结果
   RC evaluate(GroupValueType &group_value);
+  RC evaluate_null(GroupValueType &group_value);
 
 protected:
   std::vector<Expression *> aggregate_expressions_;  /// 聚合表达式

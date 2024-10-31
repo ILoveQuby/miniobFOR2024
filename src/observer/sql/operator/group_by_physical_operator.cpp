@@ -101,3 +101,28 @@ RC GroupByPhysicalOperator::evaluate(GroupValueType &group_value)
 
   return rc;
 }
+
+RC GroupByPhysicalOperator::evaluate_null(GroupValueType &group_value)
+{
+  RC                    rc = RC::SUCCESS;
+  vector<TupleCellSpec> aggregator_names;
+  for (Expression *expr : aggregate_expressions_) {
+    aggregator_names.emplace_back(expr->name());
+  }
+  AggregatorList &aggregators           = get<0>(group_value);
+  CompositeTuple &composite_value_tuple = get<1>(group_value);
+  ValueListTuple  evaluated_tuple;
+  vector<Value>   values;
+  for (size_t i = 0; i < aggregators.size(); i++) {
+    Value value;
+    value.set_null();
+    values.emplace_back(value);
+  }
+
+  evaluated_tuple.set_cells(values);
+  evaluated_tuple.set_names(aggregator_names);
+
+  composite_value_tuple.add_tuple(make_unique<ValueListTuple>(std::move(evaluated_tuple)));
+
+  return rc;
+}

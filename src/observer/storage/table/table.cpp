@@ -532,7 +532,7 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
         bit_map.set_bit(i);
       else {
         bit_map.clear_bit(i);
-        memcpy(data + cur_field->offset(), values->data(), cur_field->len());
+        set_value_to_record(data, *values, &fields);
       }
       break;
     }

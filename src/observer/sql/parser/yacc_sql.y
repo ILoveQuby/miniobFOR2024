@@ -123,6 +123,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         JOIN
         HAVING
         EXISTS
+        UNIQUE
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -146,6 +147,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   char *                                     string;
   int                                        number;
   float                                      floats;
+  bool                                       boolean;
 }
 
 %token <number> NUMBER
@@ -176,6 +178,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type<expression_list>      select_attr
 %type <string>              storage_format
 %type <string>              aggregate_type
+%type <boolean>             unique_op
 %type <expression>          sub_query_expr
 %type <expression>          expression
 %type <expression_list>     expression_list
@@ -302,16 +305,27 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE unique_op INDEX ID ON ID LBRACE ID RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
-      create_index.index_name = $3;
-      create_index.relation_name = $5;
-      create_index.attribute_name = $7;
-      free($3);
-      free($5);
-      free($7);
+      create_index.unique = $2;
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+      create_index.attribute_name = $8;
+      free($4);
+      free($6);
+      free($8);
+    }
+    ;
+unique_op:
+    /* empty */ 
+    {
+      $$ = false;
+    }
+    | UNIQUE
+    {
+      $$ = true;
     }
     ;
 

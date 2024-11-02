@@ -372,6 +372,8 @@ public:
    */
   void close();
 
+  RC update_record(const RID *rid, const char *data);
+
   /**
    * @brief 从指定文件中删除指定槽位的记录
    *

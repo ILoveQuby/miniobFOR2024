@@ -386,7 +386,7 @@ RC Table::get_chunk_scanner(ChunkFileScanner &scanner, Trx *trx, ReadWriteMode m
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name)
+RC Table::create_index(Trx *trx, const bool unique, const FieldMeta *field_meta, const char *index_name)
 {
   if (common::is_blank(index_name) || nullptr == field_meta) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
@@ -395,7 +395,7 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
 
   IndexMeta new_index_meta;
 
-  RC rc = new_index_meta.init(index_name, *field_meta);
+  RC rc = new_index_meta.init(index_name, *field_meta, unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s", 
              name(), index_name, field_meta->name());
@@ -431,6 +431,7 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
       return rc;
     }
   }
+
   if (RC::RECORD_EOF == rc) {
     rc = RC::SUCCESS;
   } else {
@@ -511,9 +512,12 @@ RC Table::delete_record(const Record &record)
 
 RC Table::update_record(Record &record, Value *values, FieldMeta fields)
 {
-  RC               rc         = RC::SUCCESS;
+  RC    rc       = RC::SUCCESS;
+  char *old_data = record.data();
+  char *data     = (char *)malloc(table_meta_.record_size());
+  memcpy(data, old_data, table_meta_.record_size());
   const FieldMeta *null_field = table_meta_.null_field();
-  common::Bitmap   bit_map(record.data() + null_field->offset(), null_field->len());
+  common::Bitmap   bit_map(data + null_field->offset(), table_meta_.field_num());
   for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
     const FieldMeta *cur_field = table_meta_.field(i);
     if (strcmp(fields.name(), cur_field->name()) == 0) {
@@ -528,26 +532,23 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
         bit_map.set_bit(i);
       else {
         bit_map.clear_bit(i);
-        set_value_to_record(record.data(), *values, cur_field);
+        memcpy(data + cur_field->offset(), values->data(), cur_field->len());
       }
       break;
     }
   }
-
+  record.set_data(data);
   for (Index *index : indexes_) {
-    rc = index->delete_entry(record.data(), &record.rid());
-    ASSERT(RC::SUCCESS == rc, 
-           "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
-           name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
+    rc = index->delete_entry(old_data, &record.rid());
+    if (rc != RC::SUCCESS)
+      return rc;
   }
-  record_handler_->delete_record(&record.rid());
-  for (Index *index : indexes_) {
-    rc = index->insert_entry(record.data(), &record.rid());
-    ASSERT(RC::SUCCESS == rc, 
-           "failed to insert entry into index. table name=%s, index name=%s, rid=%s, rc=%s",
-           name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
+  rc = insert_entry_of_indexes(record.data(), record.rid());
+  if (rc != RC::SUCCESS) {
+    insert_entry_of_indexes(old_data, record.rid());
+    return rc;
   }
-  rc = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
+  rc = record_handler_->update_record(&record.rid(), record.data());
   return rc;
 }
 
@@ -567,10 +568,12 @@ RC Table::delete_entry_of_indexes(const char *record, const RID &rid, bool error
 {
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-    rc = index->delete_entry(record, &rid);
-    if (rc != RC::SUCCESS) {
-      if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
-        break;
+    if (!index->index_meta().unique()) {
+      rc = index->delete_entry(record, &rid);
+      if (rc != RC::SUCCESS) {
+        if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
+          break;
+        }
       }
     }
   }

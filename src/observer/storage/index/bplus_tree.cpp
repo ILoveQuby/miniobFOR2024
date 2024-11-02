@@ -224,7 +224,8 @@ char *LeafIndexNodeHandler::value_at(int index)
 
 int LeafIndexNodeHandler::lookup(const KeyComparator &comparator, const char *key, bool *found /* = nullptr */) const
 {
-  const int                    size = this->size();
+  const int size = this->size();
+  LOG_INFO("size: %d", size);
   common::BinaryIterator<char> iter_begin(item_size(), __key_at(0));
   common::BinaryIterator<char> iter_end(item_size(), __key_at(size));
   common::BinaryIterator<char> iter = lower_bound(iter_begin, iter_end, key, comparator, found);
@@ -784,8 +785,8 @@ RC BplusTreeHandler::sync()
   return disk_buffer_pool_->flush_all_pages();
 }
 
-RC BplusTreeHandler::create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, AttrType attr_type,
-    int attr_length, int internal_max_size /* = -1*/, int leaf_max_size /* = -1 */)
+RC BplusTreeHandler::create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, bool unique,
+    AttrType attr_type, int attr_length, int internal_max_size /* = -1*/, int leaf_max_size /* = -1 */)
 {
   RC rc = bpm.create_file(file_name);
   if (OB_FAIL(rc)) {
@@ -803,7 +804,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler, BufferPoolManager &bpm, con
   }
   LOG_INFO("Successfully open index file %s.", file_name);
 
-  rc = this->create(log_handler, *bp, attr_type, attr_length, internal_max_size, leaf_max_size);
+  rc = this->create(log_handler, *bp, unique, attr_type, attr_length, internal_max_size, leaf_max_size);
   if (OB_FAIL(rc)) {
     bpm.close_file(file_name);
     return rc;
@@ -813,8 +814,8 @@ RC BplusTreeHandler::create(LogHandler &log_handler, BufferPoolManager &bpm, con
   return rc;
 }
 
-RC BplusTreeHandler::create(LogHandler &log_handler, DiskBufferPool &buffer_pool, AttrType attr_type, int attr_length,
-    int internal_max_size /* = -1 */, int leaf_max_size /* = -1 */)
+RC BplusTreeHandler::create(LogHandler &log_handler, DiskBufferPool &buffer_pool, bool unique, AttrType attr_type,
+    int attr_length, int internal_max_size /* = -1 */, int leaf_max_size /* = -1 */)
 {
   if (internal_max_size < 0) {
     internal_max_size = calc_internal_page_capacity(attr_length);
@@ -846,6 +847,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler, DiskBufferPool &buffer_pool
 
   char            *pdata         = header_frame->data();
   IndexFileHeader *file_header   = (IndexFileHeader *)pdata;
+  file_header->unique            = unique;
   file_header->attr_length       = attr_length;
   file_header->key_length        = attr_length + sizeof(RID);
   file_header->attr_type         = attr_type;
@@ -868,7 +870,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler, DiskBufferPool &buffer_pool
     return RC::NOMEM;
   }
 
-  key_comparator_.init(file_header->attr_type, file_header->attr_length);
+  key_comparator_.init(file_header->unique, file_header->attr_type, file_header->attr_length);
   key_printer_.init(file_header->attr_type, file_header->attr_length);
 
   /*
@@ -940,7 +942,7 @@ RC BplusTreeHandler::open(LogHandler &log_handler, DiskBufferPool &buffer_pool)
   // close old page_handle
   buffer_pool.unpin_page(frame);
 
-  key_comparator_.init(file_header_.attr_type, file_header_.attr_length);
+  key_comparator_.init(file_header_.unique, file_header_.attr_type, file_header_.attr_length);
   key_printer_.init(file_header_.attr_type, file_header_.attr_length);
   LOG_INFO("Successfully open index");
   return RC::SUCCESS;
@@ -1257,11 +1259,11 @@ RC BplusTreeHandler::insert_entry_into_leaf_node(
   LeafIndexNodeHandler leaf_node(mtr, file_header_, frame);
   bool                 exists          = false;  // 该数据是否已经存在指定的叶子节点中了
   int                  insert_position = leaf_node.lookup(key_comparator_, key, &exists);
+  LOG_INFO("exists : %d", exists);
   if (exists) {
     LOG_TRACE("entry exists");
     return RC::RECORD_DUPLICATE_KEY;
   }
-
   if (leaf_node.size() < leaf_node.max_size()) {
     leaf_node.insert(insert_position, key, (const char *)rid);
     frame->mark_dirty();
@@ -1432,7 +1434,7 @@ RC BplusTreeHandler::recover_init_header_page(
   header_dirty_ = false;
   frame->mark_dirty();
 
-  key_comparator_.init(file_header_.attr_type, file_header_.attr_length);
+  key_comparator_.init(file_header_.unique, file_header_.attr_type, file_header_.attr_length);
   key_printer_.init(file_header_.attr_type, file_header_.attr_length);
 
   return RC::SUCCESS;

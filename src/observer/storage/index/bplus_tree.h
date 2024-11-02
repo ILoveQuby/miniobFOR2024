@@ -73,6 +73,7 @@ public:
     Value right;
     right.set_type(attr_type_);
     right.set_data(v2, attr_length_);
+    LOG_INFO("left: %d, right : %d", left.get_int(), right.get_int());
     return DataType::type_instance(attr_type_)->compare(left, right);
   }
 
@@ -89,23 +90,30 @@ private:
 class KeyComparator
 {
 public:
-  void init(AttrType type, int length) { attr_comparator_.init(type, length); }
+  void init(bool unique, AttrType type, int length)
+  {
+    unique_ = unique;
+    attr_comparator_.init(type, length);
+  }
 
   const AttrComparator &attr_comparator() const { return attr_comparator_; }
 
   int operator()(const char *v1, const char *v2) const
   {
     int result = attr_comparator_(v1, v2);
+    LOG_INFO("result : %d", result);
     if (result != 0) {
       return result;
+    } else if (!unique_) {
+      const RID *rid1 = (const RID *)(v1 + attr_comparator_.attr_length());
+      const RID *rid2 = (const RID *)(v2 + attr_comparator_.attr_length());
+      return RID::compare(rid1, rid2);
     }
-
-    const RID *rid1 = (const RID *)(v1 + attr_comparator_.attr_length());
-    const RID *rid2 = (const RID *)(v2 + attr_comparator_.attr_length());
-    return RID::compare(rid1, rid2);
+    return result;
   }
 
 private:
+  bool           unique_;
   AttrComparator attr_comparator_;
 };
 
@@ -178,7 +186,8 @@ struct IndexFileHeader
   int32_t  leaf_max_size;      ///< 叶子节点最大的键值对数
   int32_t  attr_length;        ///< 键值的长度
   int32_t  key_length;         ///< attr length + sizeof(RID)
-  AttrType attr_type;          ///< 键值的类型
+  bool     unique;
+  AttrType attr_type;  ///< 键值的类型
 
   const string to_string() const
   {
@@ -459,9 +468,9 @@ public:
    * @param internal_max_size 内部节点最大大小
    * @param leaf_max_size 叶子节点最大大小
    */
-  RC create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, AttrType attr_type, int attr_length,
-      int internal_max_size = -1, int leaf_max_size = -1);
-  RC create(LogHandler &log_handler, DiskBufferPool &buffer_pool, AttrType attr_type, int attr_length,
+  RC create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, bool unique, AttrType attr_type,
+      int attr_length, int internal_max_size = -1, int leaf_max_size = -1);
+  RC create(LogHandler &log_handler, DiskBufferPool &buffer_pool, bool unique, AttrType attr_type, int attr_length,
       int internal_max_size = -1, int leaf_max_size = -1);
 
   /**

@@ -142,6 +142,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
+  std::vector<std::string> *                 relation_list;
   InnerJoinSqlNode *                         inner_joins;
   std::vector<InnerJoinSqlNode> *            inner_joins_list;
   char *                                     string;
@@ -182,6 +183,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression>          sub_query_expr
 %type <expression>          expression
 %type <expression_list>     expression_list
+%type <relation_list>       id_list
 %type <update_kv_list>      update_kv_list
 %type <update_kv>           update_kv
 %type<inner_joins>          join_list
@@ -305,14 +307,19 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE unique_op INDEX ID ON ID LBRACE ID RBRACE
+    CREATE unique_op INDEX ID ON ID LBRACE ID id_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.unique = $2;
       create_index.index_name = $4;
       create_index.relation_name = $6;
-      create_index.attribute_name = $8;
+      if($9 != nullptr) {
+        create_index.attribute_names.swap(*$9);
+        delete $9;
+      }
+      create_index.attribute_names.emplace_back($8);
+      std::reverse(create_index.attribute_names.begin(), create_index.attribute_names.end());
       free($4);
       free($6);
       free($8);
@@ -326,6 +333,24 @@ unique_op:
     | UNIQUE
     {
       $$ = true;
+    }
+    ;
+id_list:
+    /* empty */ 
+    {
+      $$ = nullptr;
+    }
+    | COMMA ID id_list
+    {
+      if($3 != nullptr)
+      {
+        $$ = $3;
+      }
+      else {
+        $$ = new std::vector<std::string>;
+      }
+      $$->emplace_back($2);
+      free($2);
     }
     ;
 

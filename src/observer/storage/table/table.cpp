@@ -182,20 +182,25 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
 
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
-    const IndexMeta *index_meta = table_meta_.index(i);
-    const FieldMeta *field_meta = table_meta_.field(index_meta->field());
-    if (field_meta == nullptr) {
-      LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
-                name(), index_meta->name(), index_meta->field());
-      // skip cleanup
-      //  do all cleanup action in destructive Table function
-      return RC::INTERNAL;
+    const IndexMeta          *index_meta = table_meta_.index(i);
+    vector<const FieldMeta *> field_metas;
+    const vector<string>     &field_names = index_meta->field();
+    for (int j = 0; j < index_meta->field().size(); j++) {
+      const FieldMeta *field_meta = table_meta_.field(field_names[j].c_str());
+      if (field_meta == nullptr) {
+        LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
+                name(), index_meta->name(), index_meta->field().data());
+        // skip cleanup
+        //  do all cleanup action in destructive Table function
+        return RC::INTERNAL;
+      }
+      field_metas.emplace_back(field_meta);
     }
 
     BplusTreeIndex *index      = new BplusTreeIndex();
     string          index_file = table_index_file(base_dir, name(), index_meta->name());
 
-    rc = index->open(this, index_file.c_str(), *index_meta, *field_meta);
+    rc = index->open(this, index_file.c_str(), *index_meta, field_metas);
     if (rc != RC::SUCCESS) {
       delete index;
       LOG_ERROR("Failed to open index. table=%s, index=%s, file=%s, rc=%s",
@@ -296,7 +301,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   memset(record_data, 0, record_size);
 
   const FieldMeta *null_field = table_meta_.null_field();
-  common::Bitmap   null_bitmap(record_data + null_field->offset(), null_field->len());
+  common::Bitmap   null_bitmap(record_data + null_field->offset(), table_meta_.field_num());
   null_bitmap.clear_bits();
 
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
@@ -386,19 +391,44 @@ RC Table::get_chunk_scanner(ChunkFileScanner &scanner, Trx *trx, ReadWriteMode m
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const bool unique, const FieldMeta *field_meta, const char *index_name)
+RC Table::create_index(
+    Trx *trx, const bool unique, const vector<const FieldMeta *> &field_metas, const char *index_name)
 {
-  if (common::is_blank(index_name) || nullptr == field_meta) {
+  if (common::is_blank(index_name) || field_metas.empty()) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
     return RC::INVALID_ARGUMENT;
   }
 
   IndexMeta new_index_meta;
 
-  RC rc = new_index_meta.init(index_name, *field_meta, unique);
+  RC rc = new_index_meta.init(index_name, field_metas, unique);
   if (rc != RC::SUCCESS) {
+    string field_names = field_metas[0]->name();
+    for (int i = 1; i < static_cast<int>(field_metas.size()); i++) {
+      field_names += ", ";
+      field_names += field_metas[i]->name();
+    }
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s", 
-             name(), index_name, field_meta->name());
+             name(), index_name, field_names.c_str());
+    return rc;
+  }
+
+  vector<int> field_ids;
+  for (int i = 0; i < static_cast<int>(field_metas.size()); i++) {
+    const FieldMeta *field_meta = field_metas[i];
+    int              field_id   = 0;
+    for (FieldMeta field : *table_meta_.field_metas()) {
+      if (0 == strcmp(field.name(), field_meta->name())) {
+        field_ids.emplace_back(field_id);
+        break;
+      }
+      field_id++;
+    }
+  }
+  if (field_ids.size() != field_metas.size()) {
+    rc = RC::VARIABLE_NOT_VALID;
+    LOG_ERROR("Failed to find column_id for all index_fields, column_id size:%d, index_field size:%d", 
+                field_ids.size(), field_metas.size());
     return rc;
   }
 
@@ -406,7 +436,7 @@ RC Table::create_index(Trx *trx, const bool unique, const FieldMeta *field_meta,
   BplusTreeIndex *index      = new BplusTreeIndex();
   string          index_file = table_index_file(base_dir_.c_str(), name(), index_name);
 
-  rc = index->create(this, index_file.c_str(), new_index_meta, *field_meta);
+  rc = index->create(this, index_file.c_str(), new_index_meta, field_metas, field_ids);
   if (rc != RC::SUCCESS) {
     delete index;
     LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
@@ -549,6 +579,8 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
     return rc;
   }
   rc = record_handler_->update_record(&record.rid(), record.data());
+  if (rc != RC::SUCCESS)
+    record.set_data(old_data);
   return rc;
 }
 
@@ -591,11 +623,11 @@ Index *Table::find_index(const char *index_name) const
 }
 Index *Table::find_index_by_field(const char *field_name) const
 {
-  const TableMeta &table_meta = this->table_meta();
-  const IndexMeta *index_meta = table_meta.find_index_by_field(field_name);
-  if (index_meta != nullptr) {
-    return this->find_index(index_meta->name());
-  }
+  // const TableMeta &table_meta = this->table_meta();
+  // const IndexMeta *index_meta = table_meta.find_index_by_field(field_name);
+  // if (index_meta != nullptr) {
+  //   return this->find_index(index_meta->name());
+  // }
   return nullptr;
 }
 

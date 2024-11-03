@@ -178,7 +178,7 @@ public:
     ASSERT(!this->speces_.empty(), "RowTuple speces empty!");
     const FieldMeta *null_field = this->speces_.front()->field().meta();
     ASSERT(nullptr != null_field && AttrType::CHARS == null_field->type(), "RowTuple get null field failed!");
-    bitmap_.init(record->data() + null_field->offset(), null_field->len());
+    bitmap_.init(record->data() + null_field->offset(), null_field->len() * 8);
   }
 
   void set_schema(const Table *table, const std::vector<FieldMeta> *fields)

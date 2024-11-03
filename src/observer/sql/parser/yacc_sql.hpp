@@ -147,6 +147,7 @@ union YYSTYPE
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
+  std::vector<std::string> *                 relation_list;
   InnerJoinSqlNode *                         inner_joins;
   std::vector<InnerJoinSqlNode> *            inner_joins_list;
   char *                                     string;
@@ -154,7 +155,7 @@ union YYSTYPE
   float                                      floats;
   bool                                       boolean;
 
-#line 158 "yacc_sql.hpp"
+#line 159 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

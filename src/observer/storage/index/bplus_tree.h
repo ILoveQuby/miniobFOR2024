@@ -30,6 +30,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/index/latch_memo.h"
 #include "storage/index/bplus_tree_log.h"
 
+#define MAX_INDEX_FIELD_NUM 16
+
 class BplusTreeHandler;
 class BplusTreeMiniTransaction;
 
@@ -56,30 +58,51 @@ enum class BplusTreeOperationType
 class AttrComparator
 {
 public:
-  void init(AttrType type, int length)
+  void init(AttrType *type, int *length, int attr_num, int *field_id)
   {
-    attr_type_   = type;
-    attr_length_ = length;
+    for (int i = 0; i < attr_num; i++) {
+      attr_type_.emplace_back(type[i]);
+      attr_length_.emplace_back(length[i]);
+      field_id_.emplace_back(field_id[i]);
+    }
   }
 
-  int attr_length() const { return attr_length_; }
+  int attr_length() const
+  {
+    int res = 0;
+    for (int length : attr_length_)
+      res += length;
+    return res;
+  }
 
   int operator()(const char *v1, const char *v2) const
   {
-    // TODO: optimized the comparison
-    Value left;
-    left.set_type(attr_type_);
-    left.set_data(v1, attr_length_);
-    Value right;
-    right.set_type(attr_type_);
-    right.set_data(v2, attr_length_);
-    LOG_INFO("left: %d, right : %d", left.get_int(), right.get_int());
-    return DataType::type_instance(attr_type_)->compare(left, right);
+    int result = 0;
+    int offset = attr_length_[0];
+    // common::Bitmap l_map(const_cast<char *>(v1), attr_length_[0] * 8);
+    // common::Bitmap r_map(const_cast<char *>(v2), attr_length_[0] * 8);
+    for (size_t i = 1; i < attr_type_.size(); i++) {
+      // if (l_map.get_bit(field_id_[i]) == 0 || r_map.get_bit(field_id_[i]) == 0)
+      //   return -1;
+      Value left;
+      left.set_type(attr_type_[i]);
+      left.set_data(v1 + offset, attr_length_[i]);
+      Value right;
+      right.set_type(attr_type_[i]);
+      right.set_data(v2 + offset, attr_length_[i]);
+      offset += attr_length_[i];
+      result = DataType::type_instance(attr_type_[i])->compare(left, right);
+      LOG_INFO("left: %d right: %d", left.get_int(), right.get_int());
+      if (result != 0)
+        return result;
+    }
+    return result;
   }
 
 private:
-  AttrType attr_type_;
-  int      attr_length_;
+  vector<AttrType> attr_type_;
+  vector<int>      attr_length_;
+  vector<int>      field_id_;
 };
 
 /**
@@ -90,10 +113,10 @@ private:
 class KeyComparator
 {
 public:
-  void init(bool unique, AttrType type, int length)
+  void init(bool unique, AttrType *type, int *length, int attr_num, int *field_id)
   {
     unique_ = unique;
-    attr_comparator_.init(type, length);
+    attr_comparator_.init(type, length, attr_num, field_id);
   }
 
   const AttrComparator &attr_comparator() const { return attr_comparator_; }
@@ -124,23 +147,38 @@ private:
 class AttrPrinter
 {
 public:
-  void init(AttrType type, int length)
+  void init(AttrType *type, int *length, int attr_num)
   {
-    attr_type_   = type;
-    attr_length_ = length;
+    for (int i = 0; i < attr_num; i++) {
+      attr_type_.emplace_back(type[i]);
+      attr_length_.emplace_back(length[i]);
+    }
   }
 
-  int attr_length() const { return attr_length_; }
+  int attr_length() const
+  {
+    int res = 0;
+    for (int length : attr_length_)
+      res += length;
+    return res;
+  }
 
   string operator()(const char *v) const
   {
-    Value value(attr_type_, const_cast<char *>(v), attr_length_);
-    return value.to_string();
+    string str;
+    for (size_t i = 0, offset = 0; i < attr_type_.size(); i++) {
+      Value value(attr_type_[i], const_cast<char *>(v + offset), attr_length_[i]);
+      offset += attr_length_[i];
+      str += value.to_string();
+      str += ",";
+    }
+    str += " ";
+    return str;
   }
 
 private:
-  AttrType attr_type_;
-  int      attr_length_;
+  vector<AttrType> attr_type_;
+  vector<int>      attr_length_;
 };
 
 /**
@@ -150,7 +188,7 @@ private:
 class KeyPrinter
 {
 public:
-  void init(AttrType type, int length) { attr_printer_.init(type, length); }
+  void init(AttrType *type, int *length, int attr_num) { attr_printer_.init(type, length, attr_num); }
 
   const AttrPrinter &attr_printer() const { return attr_printer_; }
 
@@ -184,10 +222,13 @@ struct IndexFileHeader
   PageNum  root_page;          ///< 根节点在磁盘中的页号
   int32_t  internal_max_size;  ///< 内部节点最大的键值对数
   int32_t  leaf_max_size;      ///< 叶子节点最大的键值对数
-  int32_t  attr_length;        ///< 键值的长度
+  int32_t  attr_num;           ///< 键值的长度
   int32_t  key_length;         ///< attr length + sizeof(RID)
   bool     unique;
-  AttrType attr_type;  ///< 键值的类型
+  int32_t  field_id[MAX_INDEX_FIELD_NUM];
+  int32_t  attr_length[MAX_INDEX_FIELD_NUM];  ///< 键值的长度
+  int32_t  attr_offset[MAX_INDEX_FIELD_NUM];  ///< 键值在record中的offset
+  AttrType attr_type[MAX_INDEX_FIELD_NUM];    ///< 键值的类型
 
   const string to_string() const
   {
@@ -195,7 +236,7 @@ struct IndexFileHeader
 
     ss << "attr_length:" << attr_length << ","
        << "key_length:" << key_length << ","
-       << "attr_type:" << attr_type_to_string(attr_type) << ","
+       << "attr_type:" << attr_type << ","
        << "root_page:" << root_page << ","
        << "internal_max_size:" << internal_max_size << ","
        << "leaf_max_size:" << leaf_max_size << ";";
@@ -472,6 +513,9 @@ public:
       int attr_length, int internal_max_size = -1, int leaf_max_size = -1);
   RC create(LogHandler &log_handler, DiskBufferPool &buffer_pool, bool unique, AttrType attr_type, int attr_length,
       int internal_max_size = -1, int leaf_max_size = -1);
+  RC create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, bool unique,
+      const vector<const FieldMeta *> &field_metas, const vector<int> &field_ids, int internal_max_size = -1,
+      int leaf_max_size = -1);
 
   /**
    * @brief 打开一个B+树

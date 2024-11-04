@@ -34,6 +34,8 @@ LogReplayer *VacuousTrxKit::create_log_replayer(Db &, LogHandler &) { return new
 
 RC VacuousTrx::insert_record(Table *table, Record &record) { return table->insert_record(record); }
 
+RC VacuousTrx::insert_records(Table *table, std::vector<Record> &records) { return table->insert_records(records); }
+
 RC VacuousTrx::delete_record(Table *table, Record &record) { return table->delete_record(record); }
 
 RC VacuousTrx::visit_record(Table *table, Record &record, ReadWriteMode) { return RC::SUCCESS; }

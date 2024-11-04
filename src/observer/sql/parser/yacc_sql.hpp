@@ -145,6 +145,7 @@ union YYSTYPE
   UpdateKv *                                 update_kv;
   std::vector<UpdateKv> *                    update_kv_list;
   std::vector<Value> *                       value_list;
+  std::vector<std::vector<Value>> *          insert_value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
@@ -155,7 +156,7 @@ union YYSTYPE
   float                                      floats;
   bool                                       boolean;
 
-#line 159 "yacc_sql.hpp"
+#line 160 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

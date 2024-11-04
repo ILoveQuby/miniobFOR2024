@@ -17,7 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 
-InsertStmt::InsertStmt(Table *table, const Value *values, int value_amount)
+InsertStmt::InsertStmt(Table *table, std::vector<const Value *> values, std::vector<int> value_amount)
     : table_(table), values_(values), value_amount_(value_amount)
 {}
 
@@ -37,25 +37,30 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  // check the fields number
-  const Value     *values     = inserts.values.data();
-  const int        value_num  = static_cast<int>(inserts.values.size());
-  const TableMeta &table_meta = table->table_meta();
-  const int        field_num  = table_meta.field_num() - table_meta.sys_field_num();
-  if (field_num != value_num) {
-    LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
-    return RC::SCHEMA_FIELD_MISSING;
+  std::vector<const Value *> valuess;
+  std::vector<int>           vector_nums;
+  const TableMeta           &table_meta = table->table_meta();
+  const int                  field_num  = table_meta.field_num() - table_meta.sys_field_num();
+  for (auto &vs : inserts.values) {
+    const Value *values    = vs.data();
+    const int    value_num = static_cast<int>(vs.size());
+    if (field_num != value_num) {
+      LOG_WARN("schema mismatch. value num=%d, field num in schema=%d", value_num, field_num);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    for (int i = 0; i < value_num; i++) {
+      const FieldMeta *field_meta = table_meta.field(i + table_meta.sys_field_num());
+      if (values[i].attr_type() == AttrType::NULLS && field_meta->nullable())
+        continue;
+      if (values[i].attr_type() != field_meta->type())
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      if (values[i].attr_type() == AttrType::CHARS && values[i].length() > field_meta->len())
+        return RC::INVALID_ARGUMENT;
+    }
+    valuess.emplace_back(values);
+    vector_nums.emplace_back(value_num);
   }
 
-  for (int i = 0; i < value_num; i++) {
-    const FieldMeta *field_meta = table_meta.field(i + table_meta.sys_field_num());
-    if (values[i].attr_type() == AttrType::NULLS && field_meta->nullable())
-      continue;
-    if (values[i].attr_type() != field_meta->type())
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-  }
-
-  // everything alright
-  stmt = new InsertStmt(table, values, value_num);
+  stmt = new InsertStmt(table, valuess, vector_nums);
   return RC::SUCCESS;
 }

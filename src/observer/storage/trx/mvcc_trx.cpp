@@ -135,6 +135,18 @@ MvccTrx::MvccTrx(MvccTrxKit &kit, LogHandler &log_handler, int32_t trx_id)
 
 MvccTrx::~MvccTrx() {}
 
+RC MvccTrx::insert_records(Table *table, std::vector<Record> &records)
+{
+  RC rc = RC::SUCCESS;
+  for (auto &record : records) {
+    rc = insert_record(table, record);
+    if (RC::SUCCESS != rc) {
+      break;
+    }
+  }
+  return rc;
+}
+
 RC MvccTrx::insert_record(Table *table, Record &record)
 {
   Field begin_field;

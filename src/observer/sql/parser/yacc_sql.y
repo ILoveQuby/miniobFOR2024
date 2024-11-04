@@ -140,6 +140,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   UpdateKv *                                 update_kv;
   std::vector<UpdateKv> *                    update_kv_list;
   std::vector<Value> *                       value_list;
+  std::vector<std::vector<Value>> *          insert_value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
@@ -183,6 +184,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <expression>          sub_query_expr
 %type <expression>          expression
 %type <expression_list>     expression_list
+%type <value_list>          insert_value
+%type <insert_value_list>   insert_value_list
 %type <relation_list>       id_list
 %type <update_kv_list>      update_kv_list
 %type <update_kv>           update_kv
@@ -470,18 +473,48 @@ type:
     | DATE_T   {$$ = static_cast<int>(AttrType::DATES); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE 
+    INSERT INTO ID VALUES insert_value insert_value_list 
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
-      if ($7 != nullptr) {
-        $$->insertion.values.swap(*$7);
-        delete $7;
+      if($6 != nullptr) {
+        $$->insertion.values.swap(*$6);
       }
-      $$->insertion.values.emplace_back(*$6);
+      $$->insertion.values.emplace_back(*$5);
       std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
-      delete $6;
+      delete $5;
       free($3);
+    }
+    ;
+insert_value_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | COMMA insert_value insert_value_list
+    {
+      if($3 != nullptr) {
+        $$ = $3;
+      }
+      else {
+        $$ = new std::vector<std::vector<Value>>;
+      }
+      $$->emplace_back(*$2);
+      delete $2;
+    }
+    ;
+insert_value:
+    LBRACE value value_list RBRACE
+    {
+      if($3 != nullptr) {
+        $$ = $3;
+      }
+      else {
+        $$ = new std::vector<Value>;
+      }
+      $$->emplace_back(*$2);
+      std::reverse($$->begin(), $$->end());
+      delete $2;
     }
     ;
 

@@ -31,6 +31,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record_manager.h"
 #include "storage/table/table.h"
 #include "storage/trx/trx.h"
+#include "common/lang/defer.h"
 
 Table::~Table()
 {
@@ -226,12 +227,12 @@ RC Table::insert_record(Record &record)
 
   rc = insert_entry_of_indexes(record.data(), record.rid());
   if (rc != RC::SUCCESS) {  // 可能出现了键值重复
-    RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false /*error_on_not_exists*/);
-    if (rc2 != RC::SUCCESS) {
-      LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
-                name(), rc2, strrc(rc2));
-    }
-    rc2 = record_handler_->delete_record(&record.rid());
+    // RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false /*error_on_not_exists*/);
+    //  if (rc2 != RC::SUCCESS) {
+    //    LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+    //              name(), rc2, strrc(rc2));
+    //  }
+    RC rc2 = record_handler_->delete_record(&record.rid());
     if (rc2 != RC::SUCCESS) {
       LOG_PANIC("Failed to rollback record data when insert index entries failed. table name=%s, rc=%d:%s",
                 name(), rc2, strrc(rc2));
@@ -545,6 +546,11 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
   RC    rc       = RC::SUCCESS;
   char *old_data = record.data();
   char *data     = (char *)malloc(table_meta_.record_size());
+  DEFER([&]() {
+    free(data);
+    data = nullptr;
+    record.set_data(old_data);
+  });
   memcpy(data, old_data, table_meta_.record_size());
   const FieldMeta *null_field = table_meta_.null_field();
   common::Bitmap   bit_map(data + null_field->offset(), table_meta_.field_num());
@@ -568,19 +574,19 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
     }
   }
   record.set_data(data);
-  for (Index *index : indexes_) {
-    rc = index->delete_entry(old_data, &record.rid());
-    if (rc != RC::SUCCESS)
-      return rc;
-  }
+  rc = delete_entry_of_indexes(old_data, record.rid(), false);
+  if (rc != RC::SUCCESS)
+    return rc;
   rc = insert_entry_of_indexes(record.data(), record.rid());
   if (rc != RC::SUCCESS) {
     insert_entry_of_indexes(old_data, record.rid());
     return rc;
   }
   rc = record_handler_->update_record(&record.rid(), record.data());
-  if (rc != RC::SUCCESS)
-    record.set_data(old_data);
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+  record.set_data(old_data);
   return rc;
 }
 
@@ -600,12 +606,10 @@ RC Table::delete_entry_of_indexes(const char *record, const RID &rid, bool error
 {
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-    if (!index->index_meta().unique()) {
-      rc = index->delete_entry(record, &rid);
-      if (rc != RC::SUCCESS) {
-        if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
-          break;
-        }
+    rc = index->delete_entry(record, &rid);
+    if (rc != RC::SUCCESS) {
+      if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
+        break;
       }
     }
   }

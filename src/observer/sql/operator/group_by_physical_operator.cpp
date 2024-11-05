@@ -114,9 +114,15 @@ RC GroupByPhysicalOperator::evaluate_null(GroupValueType &group_value)
   ValueListTuple  evaluated_tuple;
   vector<Value>   values;
   for (size_t i = 0; i < aggregators.size(); i++) {
-    Value value;
-    value.set_null();
-    values.emplace_back(value);
+    if (aggregators[i]->type() >= 4) {
+      Value value;
+      value = Value(0);
+      values.emplace_back(value);
+    } else {
+      Value value;
+      value.set_null();
+      values.emplace_back(value);
+    }
   }
 
   evaluated_tuple.set_cells(values);

@@ -20,10 +20,10 @@ See the Mulan PSL v2 for more details. */
 class Aggregator
 {
 public:
-  virtual ~Aggregator() = default;
-
-  virtual RC accumulate(const Value &value) = 0;
-  virtual RC evaluate(Value &result)        = 0;
+  virtual ~Aggregator()                      = default;
+  virtual int type()                         = 0;
+  virtual RC  accumulate(const Value &value) = 0;
+  virtual RC  evaluate(Value &result)        = 0;
 
 protected:
   Value value_;
@@ -33,40 +33,46 @@ protected:
 class SumAggregator : public Aggregator
 {
 public:
-  RC accumulate(const Value &value) override;
-  RC evaluate(Value &result) override;
+  int type() { return 0; }
+  RC  accumulate(const Value &value) override;
+  RC  evaluate(Value &result) override;
 };
 
 class MaxAggregator : public Aggregator
 {
 public:
-  RC accumulate(const Value &value) override;
-  RC evaluate(Value &result) override;
+  int type() { return 1; }
+  RC  accumulate(const Value &value) override;
+  RC  evaluate(Value &result) override;
 };
 
 class MinAggregator : public Aggregator
 {
 public:
-  RC accumulate(const Value &value) override;
-  RC evaluate(Value &result) override;
+  int type() { return 2; }
+  RC  accumulate(const Value &value) override;
+  RC  evaluate(Value &result) override;
 };
 
 class AvgAggregator : public Aggregator
 {
 public:
-  RC accumulate(const Value &value) override;
-  RC evaluate(Value &result) override;
+  int type() { return 3; }
+  RC  accumulate(const Value &value) override;
+  RC  evaluate(Value &result) override;
 };
 
 class CountAggregator : public Aggregator
 {
 public:
-  RC accumulate(const Value &value) override;
-  RC evaluate(Value &result) override;
+  int type() { return 4; }
+  RC  accumulate(const Value &value) override;
+  RC  evaluate(Value &result) override;
 };
 
 class CountStarAggregator : public Aggregator
 {
-  RC accumulate(const Value &value) override;
-  RC evaluate(Value &result) override;
+  int type() { return 5; }
+  RC  accumulate(const Value &value) override;
+  RC  evaluate(Value &result) override;
 };

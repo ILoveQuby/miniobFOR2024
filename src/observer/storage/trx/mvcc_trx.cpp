@@ -208,7 +208,10 @@ RC MvccTrx::delete_record(Table *table, Record &record)
   return RC::SUCCESS;
 }
 
-RC MvccTrx::update_record(Table *table, Record &record, Value *values, FieldMeta fields) { return RC::SUCCESS; }
+RC MvccTrx::update_record(Table *table, Record &record, vector<Value> values, vector<FieldMeta> fields)
+{
+  return RC::SUCCESS;
+}
 
 RC MvccTrx::visit_record(Table *table, Record &record, ReadWriteMode mode)
 {

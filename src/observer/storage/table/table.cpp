@@ -590,7 +590,7 @@ RC Table::delete_record(const Record &record)
   return rc;
 }
 
-RC Table::update_record(Record &record, Value *values, FieldMeta fields)
+RC Table::update_record(Record &record, vector<Value> values, vector<FieldMeta> fields)
 {
   RC    rc       = RC::SUCCESS;
   char *old_data = record.data();
@@ -603,23 +603,27 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
   memcpy(data, old_data, table_meta_.record_size());
   const FieldMeta *null_field = table_meta_.null_field();
   common::Bitmap   bit_map(data + null_field->offset(), table_meta_.field_num());
-  for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
-    const FieldMeta *cur_field = table_meta_.field(i);
-    if (strcmp(fields.name(), cur_field->name()) == 0) {
-      if (values->is_null()) {
-        if (!cur_field->nullable())
-          return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-      } else {
-        if (values->attr_type() != cur_field->type())
-          return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  for (size_t idx = 0; idx < values.size(); idx++) {
+    Value     value = values[idx];
+    FieldMeta field = fields[idx];
+    for (int i = table_meta_.sys_field_num(); i < table_meta_.field_num(); i++) {
+      const FieldMeta *cur_field = table_meta_.field(i);
+      if (strcmp(field.name(), cur_field->name()) == 0) {
+        if (value.is_null()) {
+          if (!cur_field->nullable())
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        } else {
+          if (value.attr_type() != cur_field->type())
+            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        }
+        if (value.is_null())
+          bit_map.set_bit(i);
+        else {
+          bit_map.clear_bit(i);
+          set_value_to_record(data, value, &field);
+        }
+        break;
       }
-      if (values->is_null())
-        bit_map.set_bit(i);
-      else {
-        bit_map.clear_bit(i);
-        set_value_to_record(data, *values, &fields);
-      }
-      break;
     }
   }
   record.set_data(data);
@@ -636,6 +640,7 @@ RC Table::update_record(Record &record, Value *values, FieldMeta fields)
     return rc;
   }
   record.set_data(old_data);
+  free(data);
   return rc;
 }
 

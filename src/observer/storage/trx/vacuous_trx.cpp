@@ -40,7 +40,7 @@ RC VacuousTrx::delete_record(Table *table, Record &record) { return table->delet
 
 RC VacuousTrx::visit_record(Table *table, Record &record, ReadWriteMode) { return RC::SUCCESS; }
 
-RC VacuousTrx::update_record(Table *table, Record &record, Value *values, FieldMeta fields)
+RC VacuousTrx::update_record(Table *table, Record &record, vector<Value> values, vector<FieldMeta> fields)
 {
   return table->update_record(record, values, fields);
 }

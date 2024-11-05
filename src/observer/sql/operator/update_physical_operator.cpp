@@ -31,8 +31,8 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     return rc;
   }
 
-  trx_ = trx;
-
+  trx_    = trx;
+  int idx = 0;
   while (OB_SUCC(rc = child->next())) {
     Tuple *tuple = child->current_tuple();
     if (nullptr == tuple) {
@@ -40,39 +40,45 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       return rc;
     }
 
-    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    Record   &record    = row_tuple->record();
+    RowTuple     *row_tuple = static_cast<RowTuple *>(tuple);
+    Record       &record    = row_tuple->record();
+    vector<Value> new_values(fields_.size());
+    vector<Value> old_values(fields_.size());
+    for (size_t i = 0; i < fields_.size(); i++) {
+      Value     &values    = new_values[i];
+      Value     &old_value = old_values[i];
+      EmptyTuple tp;
+      if (values_[i]->type() == ExprType::SUBQUERY) {
+        SubQueryExpr *sub_query_expr = static_cast<SubQueryExpr *>(values_[i].get());
+        rc                           = sub_query_expr->open(nullptr);
+        if (rc != RC::SUCCESS)
+          return rc;
+        int val_count = 0;
+        while (RC::SUCCESS == (rc = sub_query_expr->get_value(tp, values)))
+          val_count++;
+        if (val_count == 0)
+          values.set_null();
+        else if (val_count > 1)
+          return RC::INVALID_ARGUMENT;
+        sub_query_expr->close();
+      } else {
+        values_[i]->get_value(tp, values);
+      }
+      old_value.set_type(fields_[i].type());
+      old_value.set_data(record.data() + fields_[i].offset(), fields_[i].len());
+    }
+    old_values_.emplace_back(std::move(old_values));
+    rc = trx_->update_record(table_, record, new_values, fields_);
+    if (rc != RC::SUCCESS) {
+      for (int j = 0; j < idx; j++)
+        table_->update_record(records_[j], old_values_[j], fields_);
+      return rc;
+    }
     records_.emplace_back(std::move(record));
+    idx++;
   }
 
   child->close();
-  for (size_t i = 0; i < fields_.size(); i++) {
-    Value      values;
-    EmptyTuple tp;
-    if (values_[i]->type() == ExprType::SUBQUERY) {
-      SubQueryExpr *sub_query_expr = static_cast<SubQueryExpr *>(values_[i].get());
-      rc                           = sub_query_expr->open(nullptr);
-      if (rc != RC::SUCCESS)
-        return rc;
-      int val_count = 0;
-      while (RC::SUCCESS == (rc = sub_query_expr->get_value(tp, values)))
-        val_count++;
-      if (val_count == 0)
-        values.set_null();
-      else if (val_count > 1)
-        return RC::INVALID_ARGUMENT;
-      sub_query_expr->close();
-    } else
-      values_[i]->get_value(tp, values);
-
-    for (Record &record : records_) {
-      rc = trx_->update_record(table_, record, &values, fields_[i]);
-      if (rc != RC::SUCCESS) {
-        LOG_WARN("failed to delete record: %s", strrc(rc));
-        return rc;
-      }
-    }
-  }
   return RC::SUCCESS;
 }
 

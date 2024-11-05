@@ -46,5 +46,5 @@ private:
   std::vector<FieldMeta>                   fields_;
   Trx                                     *trx_ = nullptr;
   std::vector<Record>                      records_;
-  bool                                     invaild_ = false;
+  std::vector<vector<Value>>               old_values_;
 };

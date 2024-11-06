@@ -203,11 +203,20 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
       right_sub_query->close();
   });
 
-  auto open_sub_query = [](const unique_ptr<Expression> &expr) {
+  auto open_sub_query = [&tuple](const unique_ptr<Expression> &expr) {
     SubQueryExpr *sub = nullptr;
     if (expr->type() == ExprType::SUBQUERY) {
       sub = static_cast<SubQueryExpr *>(expr.get());
+      sub->merge(tuple);
       sub->open(nullptr);
+    }
+    return sub;
+  };
+  auto close_sub_query = [&tuple](const unique_ptr<Expression> &expr) {
+    SubQueryExpr *sub = nullptr;
+    if (expr->type() == ExprType::SUBQUERY) {
+      sub = static_cast<SubQueryExpr *>(expr.get());
+      sub->close();
     }
     return sub;
   };
@@ -266,11 +275,12 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     }
   }
   bool bool_value = false;
-
-  rc = compare_value(left_value, right_value, bool_value);
+  rc              = compare_value(left_value, right_value, bool_value);
   if (rc == RC::SUCCESS) {
     value.set_boolean(bool_value);
   }
+  close_sub_query(left_);
+  close_sub_query(right_);
   return rc;
 }
 
@@ -764,21 +774,21 @@ RC SubQueryExpr::open(Trx *trx) { return physical_oper_->open(trx); }
 
 RC SubQueryExpr::close() { return physical_oper_->close(); }
 
-bool SubQueryExpr::has_more_row(const Tuple &tuple) const
+RC SubQueryExpr::merge(const Tuple &tuple) const
 {
-  // TODO(wbj) 这里没考虑其他错误
   physical_oper_->set_parent_tuple(&tuple);
-  return physical_oper_->next() != RC::RECORD_EOF;
+  return RC::SUCCESS;
 }
+
+bool SubQueryExpr::has_more_row(const Tuple &tuple) const { return physical_oper_->next() != RC::RECORD_EOF; }
 
 RC SubQueryExpr::get_value(const Tuple &tuple, Value &value) const
 {
-  physical_oper_->set_parent_tuple(&tuple);
-  // 每次返回一行的第一个 cell
   if (RC rc = physical_oper_->next(); RC::SUCCESS != rc) {
     return rc;
   }
-  return physical_oper_->current_tuple()->cell_at(0, value);
+  physical_oper_->current_tuple()->cell_at(0, value);
+  return RC::SUCCESS;
 }
 
 RC SubQueryExpr::try_get_value(Value &value) const { return RC::UNIMPLEMENTED; }

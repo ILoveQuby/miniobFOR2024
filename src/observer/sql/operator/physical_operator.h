@@ -93,8 +93,9 @@ public:
   void set_parent_tuple(const Tuple *tuple)
   {
     parent_tuple_ = tuple;
-    for (auto &child : children_)
+    for (auto &child : children_) {
       child->set_parent_tuple(tuple);
+    }
   }
 
 protected:

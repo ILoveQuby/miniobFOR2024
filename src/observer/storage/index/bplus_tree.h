@@ -77,13 +77,13 @@ public:
 
   int operator()(const char *v1, const char *v2) const
   {
-    int result = 0;
-    int offset = attr_length_[0];
-    // common::Bitmap l_map(const_cast<char *>(v1), attr_length_[0] * 8);
-    // common::Bitmap r_map(const_cast<char *>(v2), attr_length_[0] * 8);
+    int            result = 0;
+    int            offset = attr_length_[0];
+    common::Bitmap l_map(const_cast<char *>(v1), attr_length_[0] * 8);
+    common::Bitmap r_map(const_cast<char *>(v2), attr_length_[0] * 8);
     for (size_t i = 1; i < attr_type_.size(); i++) {
-      // if (l_map.get_bit(field_id_[i]) == 0 || r_map.get_bit(field_id_[i]) == 0)
-      //   return -1;
+      if (l_map.get_bit(field_id_[i]) == true || r_map.get_bit(field_id_[i]) == true)
+        return -1;
       Value left;
       left.set_type(attr_type_[i]);
       left.set_data(v1 + offset, attr_length_[i]);

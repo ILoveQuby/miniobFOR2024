@@ -53,12 +53,35 @@ RC UpdatePhysicalOperator::open(Trx *trx)
         rc                           = sub_query_expr->open(nullptr);
         if (rc != RC::SUCCESS)
           return rc;
-        int val_count = 0;
-        while (RC::SUCCESS == (rc = sub_query_expr->get_value(tp, values)))
+        int   val_count = 0;
+        Value last_value;
+        bool  valid = true;
+        while (RC::SUCCESS == (rc = sub_query_expr->get_value(tp, values))) {
+          if (val_count > 1) {
+            AttrType type = values.attr_type();
+            if (type == AttrType::INTS && last_value.get_int() != values.get_int()) {
+              valid = false;
+              break;
+            }
+            if (type == AttrType::FLOATS && last_value.get_float() != values.get_float()) {
+              valid = false;
+              break;
+            }
+            if (type == AttrType::BOOLEANS && last_value.get_boolean() != values.get_boolean()) {
+              valid = false;
+              break;
+            }
+            if (type == AttrType::CHARS && last_value.get_string() != values.get_string()) {
+              valid = false;
+              break;
+            }
+          }
           val_count++;
+          last_value = values;
+        }
         if (val_count == 0)
           values.set_null();
-        else if (val_count > 1)
+        else if (val_count > 1 && !valid)
           return RC::INVALID_ARGUMENT;
         sub_query_expr->close();
       } else {

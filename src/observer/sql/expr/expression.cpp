@@ -235,7 +235,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     int left_count = 0;
     while (RC::SUCCESS == (rc = left_->get_value(tuple, left_value)))
       left_count++;
-    if (left_count > 1)
+    if (left_count > 1 || left_count == 0)
       return RC::INVALID_ARGUMENT;
   } else {
     rc = left_->get_value(tuple, left_value);
@@ -267,7 +267,7 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
     int right_count = 0;
     while (RC::SUCCESS == (rc = right_->get_value(tuple, right_value)))
       right_count++;
-    if (right_count > 1) {
+    if (right_count > 1 || right_count == 0) {
       return RC::INVALID_ARGUMENT;
     }
   } else {

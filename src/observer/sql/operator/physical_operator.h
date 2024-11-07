@@ -92,7 +92,7 @@ public:
 
   void set_parent_tuple(const Tuple *tuple)
   {
-    parent_tuple_ = tuple;
+    parent_tuple_.emplace_back(tuple);
     for (auto &child : children_) {
       child->set_parent_tuple(tuple);
     }
@@ -100,5 +100,5 @@ public:
 
 protected:
   std::vector<std::unique_ptr<PhysicalOperator>> children_;
-  const Tuple                                   *parent_tuple_ = nullptr;
+  vector<const Tuple *>                          parent_tuple_;
 };

@@ -73,9 +73,10 @@ RC TableScanPhysicalOperator::filter(RowTuple &tuple, bool &result)
   Value       value;
   Tuple      *tp = &tuple;
   JoinedTuple jt;
-  jt.set_left(&tuple);
-  jt.set_right(const_cast<Tuple *>(parent_tuple_));
-  if (parent_tuple_) {
+  jt.set_child(&tuple);
+  for (auto &parent : parent_tuple_)
+    jt.set_child(const_cast<Tuple *>(parent));
+  if (!parent_tuple_.empty()) {
     tp = &jt;
   }
 

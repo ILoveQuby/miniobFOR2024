@@ -411,52 +411,53 @@ public:
   JoinedTuple()          = default;
   virtual ~JoinedTuple() = default;
 
-  void set_left(Tuple *left) { left_ = left; }
-  void set_right(Tuple *right) { right_ = right; }
+  void set_child(Tuple *child) { child_.emplace_back(child); }
 
-  int cell_num() const override { return left_->cell_num() + right_->cell_num(); }
+  int cell_num() const override
+  {
+    int num = 0;
+    for (auto &child : child_)
+      num += child->cell_num();
+    return num;
+  }
 
   RC cell_at(int index, Value &value) const override
   {
-    const int left_cell_num = left_->cell_num();
-    if (index >= 0 && index < left_cell_num) {
-      return left_->cell_at(index, value);
+    int num = 0;
+    for (int i = 0; i < child_.size(); i++) {
+      if (index >= num && index < num + child_[i]->cell_num()) {
+        return child_[i]->cell_at(index - num, value);
+      }
+      num += child_[i]->cell_num();
     }
-
-    if (index >= left_cell_num && index < left_cell_num + right_->cell_num()) {
-      return right_->cell_at(index - left_cell_num, value);
-    }
-
     return RC::NOTFOUND;
   }
 
   RC spec_at(int index, TupleCellSpec &spec) const override
   {
-    const int left_cell_num = left_->cell_num();
-    if (index >= 0 && index < left_cell_num) {
-      return left_->spec_at(index, spec);
+    int num = 0;
+    for (int i = 0; i < child_.size(); i++) {
+      if (index >= num && index < num + child_[i]->cell_num()) {
+        return child_[i]->spec_at(index - num, spec);
+      }
+      num += child_[i]->cell_num();
     }
-
-    if (index >= left_cell_num && index < left_cell_num + right_->cell_num()) {
-      return right_->spec_at(index - left_cell_num, spec);
-    }
-
     return RC::NOTFOUND;
   }
 
   RC find_cell(const TupleCellSpec &spec, Value &value) const override
   {
-    RC rc = left_->find_cell(spec, value);
-    if (rc == RC::SUCCESS || rc != RC::NOTFOUND) {
-      return rc;
+    for (int i = 0; i < child_.size(); i++) {
+      RC rc = child_[i]->find_cell(spec, value);
+      if (rc == RC::SUCCESS || rc != RC::NOTFOUND) {
+        return rc;
+      }
     }
-
-    return right_->find_cell(spec, value);
+    return RC::NOTFOUND;
   }
 
 private:
-  Tuple *left_  = nullptr;
-  Tuple *right_ = nullptr;
+  vector<Tuple *> child_;
 };
 
 class EmptyTuple : public Tuple

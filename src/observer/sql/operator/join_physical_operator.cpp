@@ -93,7 +93,7 @@ RC NestedLoopJoinPhysicalOperator::left_next()
   }
 
   left_tuple_ = left_->current_tuple();
-  joined_tuple_.set_left(left_tuple_);
+  joined_tuple_.set_child(left_tuple_);
   return rc;
 }
 
@@ -128,6 +128,6 @@ RC NestedLoopJoinPhysicalOperator::right_next()
   }
 
   right_tuple_ = right_->current_tuple();
-  joined_tuple_.set_right(right_tuple_);
+  joined_tuple_.set_child(right_tuple_);
   return rc;
 }

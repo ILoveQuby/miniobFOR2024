@@ -57,7 +57,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
         Value last_value;
         bool  valid = true;
         while (RC::SUCCESS == (rc = sub_query_expr->get_value(tp, values))) {
-          if (val_count > 1) {
+          if (val_count > 0) {
             AttrType type = values.attr_type();
             if (type == AttrType::INTS && last_value.get_int() != values.get_int()) {
               valid = false;

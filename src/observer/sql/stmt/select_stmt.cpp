@@ -18,7 +18,6 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
-#include "sql/parser/expression_binder.h"
 
 using namespace std;
 using namespace common;
@@ -29,20 +28,15 @@ SelectStmt::~SelectStmt()
     delete filter_stmt_;
     filter_stmt_ = nullptr;
   }
+  if (nullptr != having_stmt_) {
+    delete having_stmt_;
+    having_stmt_ = nullptr;
+  }
 }
 
-RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_map<string, Table *> parent_table_map)
+RC SelectStmt::process_from_clause(Db *db, vector<Table *> &tables, unordered_map<string, Table *> &table_map,
+    vector<InnerJoinSqlNode> &from_relations, vector<JoinTables> &join_tables, BinderContext &binder_context)
 {
-  if (nullptr == db) {
-    LOG_WARN("invalid argument, db is null.");
-    return RC::INVALID_ARGUMENT;
-  }
-  BinderContext                  binder_context;
-  vector<Table *>                tables;
-  unordered_map<string, Table *> table_map = parent_table_map;
-  unordered_map<string, Table *> local_table_map;
-  vector<JoinTables>             join_tables;
-
   auto check_tables = [&](const char *table_name) {
     if (table_name == nullptr) {
       LOG_WARN("invalid argument, relation name is null.");
@@ -54,83 +48,63 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
     binder_context.add_table(table);
-    tables.push_back(table);
+    tables.emplace_back(table);
     table_map.insert({table_name, table});
-    local_table_map.insert({table_name, table});
     return RC::SUCCESS;
   };
-
-  std::vector<ConditionSqlNode> &all_conditions = select_sql.conditions;
-  for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    const InnerJoinSqlNode                 &relations  = select_sql.relations[i];
-    const vector<vector<ConditionSqlNode>> &conditions = relations.conditions;
-    for (auto &on_conds : conditions) {
-      all_conditions.insert(all_conditions.end(), on_conds.begin(), on_conds.end());
-    }
-  }
-
-  auto check_can_push_down = [&local_table_map](const Expression *expr) {
-    if (expr->type() == ExprType::AGGREGATION)
-      return RC::INTERNAL;
-    if (expr->type() == ExprType::FIELD) {
-      const FieldExpr *field_expr = static_cast<const FieldExpr *>(expr);
-      if (local_table_map.count(field_expr->get_table_name()) != 0)
-        return RC::SUCCESS;
-      return RC::INTERNAL;
-    }
-    return RC::SUCCESS;
-  };
-  auto cond_is_ok = [&check_can_push_down, &local_table_map](const ConditionSqlNode &node) -> bool {
-    return RC::SUCCESS == node.left_expr->traverse_check(check_can_push_down) &&
-           RC::SUCCESS == node.right_expr->traverse_check(check_can_push_down);
-  };
-  auto pick_conditions = [&cond_is_ok, &all_conditions]() {
-    std::vector<ConditionSqlNode> res;
-    for (auto iter = all_conditions.begin(); iter != all_conditions.end();) {
-      if (cond_is_ok(*iter)) {
-        res.emplace_back(*iter);
-        iter = all_conditions.erase(iter);
-      } else {
-        iter++;
-      }
-    }
-    return res;
-  };
-  auto process_one_relation = [&](const std::string &relation, JoinTables &jt) {
+  auto process_one_relation = [&](const string &relation, JoinTables &jt, Expression *condition) {
     RC rc = RC::SUCCESS;
-    if (rc = check_tables(relation.c_str()); rc != RC::SUCCESS) {
+    rc    = check_tables(relation.c_str());
+    if (rc != RC::SUCCESS) {
       return rc;
     }
-    auto        ok_conds    = pick_conditions();
     FilterStmt *filter_stmt = nullptr;
-    if (!ok_conds.empty()) {
-      if (rc = FilterStmt::create(db, table_map[relation], &table_map, ok_conds.data(), ok_conds.size(), filter_stmt);
-          rc != RC::SUCCESS) {
+    if (condition != nullptr) {
+      rc = FilterStmt::create(db, table_map[relation], &table_map, condition, filter_stmt);
+      if (rc != RC::SUCCESS) {
         return rc;
       }
-      ASSERT(nullptr != filter_stmt, "FilterStmt is null!");
     }
-
-    // fill JoinTables
     jt.push(table_map[relation], filter_stmt);
     return rc;
   };
-
-  for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    InnerJoinSqlNode &relations = select_sql.relations[i];
-    local_table_map.clear();
-    JoinTables jt;
-    RC         rc = process_one_relation(relations.base_relation, jt);
-    if (rc != RC::SUCCESS)
+  for (size_t i = 0; i < from_relations.size(); i++) {
+    InnerJoinSqlNode &relations = from_relations[i];
+    JoinTables        jt;
+    RC                rc = process_one_relation(relations.base_relation, jt, nullptr);
+    if (rc != RC::SUCCESS) {
       return rc;
-    const std::vector<std::string> &join_relations = relations.join_relations;
+    }
+    vector<string>       &join_relations = relations.join_relations;
+    vector<Expression *> &conditions     = relations.conditions;
     for (size_t j = 0; j < join_relations.size(); j++) {
-      if (RC::SUCCESS != (rc = process_one_relation(join_relations[j], jt))) {
+      rc = process_one_relation(join_relations[j], jt, conditions[j]);
+      if (rc != RC::SUCCESS) {
         return rc;
       }
     }
+    conditions.clear();
     join_tables.emplace_back(std::move(jt));
   }
+  return RC::SUCCESS;
+}
+
+RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_map<string, Table *> parent_table_map)
+{
+  if (nullptr == db) {
+    LOG_WARN("invalid argument, db is null.");
+    return RC::INVALID_ARGUMENT;
+  }
+  BinderContext                  binder_context;
+  vector<Table *>                tables;
+  unordered_map<string, Table *> table_map = parent_table_map;
+  vector<JoinTables>             join_tables;
+
+  RC rc = process_from_clause(db, tables, table_map, select_sql.relations, join_tables, binder_context);
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
   vector<unique_ptr<Expression>> bound_expressions;
   ExpressionBinder               expression_binder(binder_context);
   for (unique_ptr<Expression> &expression : select_sql.expressions) {
@@ -152,45 +126,34 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_
   if (tables.size() == 1) {
     default_table = tables[0];
   }
-  FilterStmt *filter_stmt = nullptr;
-  if (!all_conditions.empty()) {
-    RC rc = FilterStmt::create(
-        db, default_table, &table_map, all_conditions.data(), static_cast<int>(all_conditions.size()), filter_stmt);
+  FilterStmt                    *filter_stmt = nullptr;
+  vector<unique_ptr<Expression>> filter_conditions;
+  if (select_sql.conditions != nullptr) {
+    unique_ptr<Expression> condition = select_sql.conditions->deep_copy();
+    RC                     rc        = expression_binder.bind_expression(condition, filter_conditions);
+    rc = FilterStmt::create(db, default_table, &table_map, select_sql.conditions, filter_stmt);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");
       return rc;
     }
   }
 
-  FilterStmt *having_stmt = nullptr;
-  if (!select_sql.having_conditions.empty()) {
-    RC rc = FilterStmt::create(db,
-        default_table,
-        &table_map,
-        select_sql.having_conditions.data(),
-        static_cast<int>(select_sql.having_conditions.size()),
-        having_stmt);
+  FilterStmt                    *having_stmt = nullptr;
+  vector<unique_ptr<Expression>> having_conditions;
+  if (select_sql.having_conditions != nullptr) {
+    unique_ptr<Expression> condition = select_sql.having_conditions->deep_copy();
+    RC                     rc        = expression_binder.bind_expression(condition, having_conditions);
+    rc = FilterStmt::create(db, default_table, &table_map, select_sql.having_conditions, having_stmt);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");
       return rc;
     }
   }
-  vector<unique_ptr<Expression>> having_bound_expression;
-  if (having_stmt != nullptr) {
-    auto filter_units = having_stmt->filter_units();
-    for (FilterUnit *unit : filter_units) {
-      unique_ptr<Expression> left  = unit->left().expr->deep_copy();
-      unique_ptr<Expression> right = unit->right().expr->deep_copy();
-      if (left->type() != ExprType::VALUE)
-        expression_binder.bind_expression(left, having_bound_expression);
-      if (right->type() != ExprType::VALUE)
-        expression_binder.bind_expression(right, having_bound_expression);
-    }
-  }
+
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->join_tables_.swap(join_tables);
   select_stmt->query_expressions_.swap(bound_expressions);
-  select_stmt->having_expressions_.swap(having_bound_expression);
+  select_stmt->having_expressions_.swap(having_conditions);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
   select_stmt->having_stmt_ = having_stmt;

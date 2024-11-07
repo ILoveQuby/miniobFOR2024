@@ -83,18 +83,18 @@ enum CompOp
 //   Value          right_value;    ///< right-hand side value if right_is_attr = FALSE
 // };
 
-struct ConditionSqlNode
-{
-  Expression *left_expr;
-  CompOp      comp;
-  Expression *right_expr;
-};
+// struct ConditionSqlNode
+// {
+//   Expression *left_expr;
+//   CompOp      comp;
+//   Expression *right_expr;
+// };
 
 struct InnerJoinSqlNode
 {
-  std::string                                base_relation;
-  std::vector<std::string>                   join_relations;
-  std::vector<std::vector<ConditionSqlNode>> conditions;
+  std::string               base_relation;
+  std::vector<std::string>  join_relations;
+  std::vector<Expression *> conditions;
 };
 
 /**
@@ -110,11 +110,11 @@ struct InnerJoinSqlNode
 
 struct SelectSqlNode
 {
-  std::vector<std::unique_ptr<Expression>> expressions;  ///< 查询的表达式
-  std::vector<InnerJoinSqlNode>            relations;    ///< 查询的表
-  std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
-  std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
-  std::vector<ConditionSqlNode>            having_conditions;
+  std::vector<std::unique_ptr<Expression>> expressions;           ///< 查询的表达式
+  std::vector<InnerJoinSqlNode>            relations;             ///< 查询的表
+  Expression                              *conditions = nullptr;  ///< 查询条件，使用AND串联起来多个条件
+  std::vector<std::unique_ptr<Expression>> group_by;              ///< group by clause
+  Expression                              *having_conditions = nullptr;
 };
 
 /**
@@ -143,8 +143,8 @@ struct InsertSqlNode
  */
 struct DeleteSqlNode
 {
-  std::string                   relation_name;  ///< Relation to delete from
-  std::vector<ConditionSqlNode> conditions;
+  std::string relation_name;  ///< Relation to delete from
+  Expression *conditions = nullptr;
 };
 
 /**
@@ -158,10 +158,10 @@ struct UpdateKv
 };
 struct UpdateSqlNode
 {
-  std::string                   relation_name;    ///< Relation to update
-  std::vector<std::string>      attribute_names;  ///< 更新的字段，仅支持一个字段
-  std::vector<Expression *>     values;           ///< 更新的值，仅支持一个字段
-  std::vector<ConditionSqlNode> conditions;
+  std::string               relation_name;    ///< Relation to update
+  std::vector<std::string>  attribute_names;  ///< 更新的字段，仅支持一个字段
+  std::vector<Expression *> values;           ///< 更新的值，仅支持一个字段
+  Expression               *conditions = nullptr;
 };
 
 /**

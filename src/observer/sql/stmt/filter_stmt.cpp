@@ -21,49 +21,15 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 
-FilterStmt::~FilterStmt()
-{
-  for (FilterUnit *unit : filter_units_) {
-    delete unit;
-  }
-  filter_units_.clear();
-}
-
 RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt)
+    Expression *condition, FilterStmt *&stmt)
 {
   RC rc = RC::SUCCESS;
   stmt  = nullptr;
-
-  FilterStmt *tmp_stmt = new FilterStmt();
-  for (int i = 0; i < condition_num; i++) {
-    FilterUnit *filter_unit = nullptr;
-
-    rc = create_filter_unit(db, default_table, tables, conditions[i], filter_unit);
-    if (rc != RC::SUCCESS) {
-      delete tmp_stmt;
-      LOG_WARN("failed to create filter unit. condition index=%d", i);
-      return rc;
-    }
-    tmp_stmt->filter_units_.push_back(filter_unit);
+  if (condition == nullptr) {
+    return rc;
   }
-
-  stmt = tmp_stmt;
-  return rc;
-}
-
-RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode &condition, FilterUnit *&filter_unit)
-{
-  RC rc = RC::SUCCESS;
-
-  CompOp comp = condition.comp;
-  if (comp < EQUAL_TO || comp >= NO_OP) {
-    LOG_WARN("invalid compare operator : %d", comp);
-    return RC::INVALID_ARGUMENT;
-  }
-
-  auto check_field = [&](Expression *expr) {
+  auto check_condition_expr = [&db, &tables, &default_table](Expression *expr) {
     if (expr->type() == ExprType::FIELD) {
       FieldExpr *field_expr = static_cast<FieldExpr *>(expr);
       return field_expr->check_field(*tables, {}, default_table, {});
@@ -81,79 +47,23 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
       sub_query_expr->set_select_stmt(select_stmt);
       return RC::SUCCESS;
     }
+    if (expr->type() == ExprType::COMPARISON) {
+      ComparisonExpr *cmp_expr = static_cast<ComparisonExpr *>(expr);
+      CompOp          comp     = cmp_expr->comp();
+      if (comp < EQUAL_TO || comp >= NO_OP) {
+        LOG_WARN("invalid compare operator : %d", comp);
+        return RC::INVALID_ARGUMENT;
+      }
+      return RC::SUCCESS;
+    }
     return RC::SUCCESS;
   };
-
-  if (rc = condition.left_expr->traverse_check(check_field); rc != RC::SUCCESS) {
-    LOG_WARN("filter_stmt check_field lhs expression error");
+  rc = condition->traverse_check(check_condition_expr);
+  if (rc != RC::SUCCESS) {
     return rc;
   }
-  if (rc = condition.right_expr->traverse_check(check_field); rc != RC::SUCCESS) {
-    LOG_WARN("filter_stmt check_field rhs expression error");
-    return rc;
-  }
-
-  filter_unit = new FilterUnit;
-  DEFER([&]() {
-    if (RC::SUCCESS != rc && nullptr != filter_unit) {
-      delete filter_unit;
-      filter_unit = nullptr;
-    }
-  });
-  FilterObj left_filter_obj, right_filter_obj;
-  left_filter_obj.expr  = condition.left_expr;
-  right_filter_obj.expr = condition.right_expr;
-  filter_unit->set_left(left_filter_obj);
-  filter_unit->set_right(right_filter_obj);
-  filter_unit->set_comp(comp);
+  FilterStmt *filter_stmt = new FilterStmt();
+  filter_stmt->condition_ = std::unique_ptr<Expression>(condition);
+  stmt                    = filter_stmt;
   return rc;
 }
-// {
-//   RC rc = RC::SUCCESS;
-
-//   CompOp comp = condition.comp;
-//   if (comp < EQUAL_TO || comp >= NO_OP) {
-//     LOG_WARN("invalid compare operator : %d", comp);
-//     return RC::INVALID_ARGUMENT;
-//   }
-
-//   filter_unit = new FilterUnit;
-//   DEFER([&]() {
-//     if (RC::SUCCESS != rc && nullptr != filter_unit) {
-//       delete filter_unit;
-//       filter_unit = nullptr;
-//     }
-//   });
-
-//   Expression                *left = nullptr;
-//   const std::vector<Table *> table_arr;
-//   rc = condition.left_expr->create_expression(*tables, table_arr, db, left, default_table);
-//   if (rc != RC::SUCCESS) {
-//     delete condition.left_expr;
-//     delete condition.right_expr;
-//     delete filter_unit;
-//     LOG_WARN("filter_stmt create lhs expression error");
-//     return rc;
-//   }
-//   Expression *right = nullptr;
-//   rc                = condition.right_expr->create_expression(*tables, table_arr, db, right, default_table);
-//   if (rc != RC::SUCCESS) {
-//     delete condition.left_expr;
-//     delete condition.right_expr;
-//     delete filter_unit;
-//     LOG_WARN("filter_stmt create rhs expression error");
-//     return rc;
-//   }
-//   ASSERT(left!= nullptr,"filter_stmt create lhs expression error");
-//   ASSERT(right!= nullptr,"filter_stmt create rhs expression error");
-//   FilterObj left_filter_obj, right_filter_obj;
-//   left_filter_obj.expr  = left;
-//   right_filter_obj.expr = right;
-//   delete condition.left_expr;
-//   delete condition.right_expr;
-//   filter_unit->set_left(left_filter_obj);
-//   filter_unit->set_right(right_filter_obj);
-//   filter_unit->set_comp(comp);
-//   // 检查两个类型是否能够比较
-//   return rc;
-// }

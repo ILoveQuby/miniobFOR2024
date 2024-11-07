@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/parser/expression_binder.h"
 
 class FieldMeta;
 class FilterStmt;
@@ -83,6 +84,11 @@ public:
   std::vector<std::unique_ptr<Expression>> &query_expressions() { return query_expressions_; }
   std::vector<std::unique_ptr<Expression>> &having_expressions() { return having_expressions_; }
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
+
+private:
+  static RC process_from_clause(Db *db, std::vector<Table *> &tables,
+      std::unordered_map<std::string, Table *> &table_map, std::vector<InnerJoinSqlNode> &from_relations,
+      std::vector<JoinTables> &join_tables, BinderContext &binder_context);
 
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;

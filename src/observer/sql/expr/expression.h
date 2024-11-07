@@ -321,6 +321,7 @@ private:
 class ComparisonExpr : public Expression
 {
 public:
+  ComparisonExpr(CompOp comp, Expression *left, Expression *right);
   ComparisonExpr(CompOp comp, std::unique_ptr<Expression> left, std::unique_ptr<Expression> right);
   virtual ~ComparisonExpr();
 
@@ -399,6 +400,7 @@ public:
   };
 
 public:
+  ConjunctionExpr(Type type, Expression *left, Expression *right);
   ConjunctionExpr(Type type, std::vector<std::unique_ptr<Expression>> children);
   virtual ~ConjunctionExpr() = default;
 

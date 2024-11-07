@@ -100,6 +100,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         FROM
         WHERE
         AND
+        OR
         SET
         ON
         LOAD
@@ -129,7 +130,6 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
   ParsedSqlNode *                            sql_node;
-  ConditionSqlNode *                         condition;
   Value *                                    value;
   enum CompOp                                comp;
   RelAttrSqlNode *                           rel_attr;
@@ -141,7 +141,6 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   std::vector<UpdateKv> *                    update_kv_list;
   std::vector<Value> *                       value_list;
   std::vector<std::vector<Value>> *          insert_value_list;
-  std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
   InnerJoinSqlNode *                         inner_joins;
@@ -166,7 +165,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
 %type <number>              type
-%type <condition>           condition
+%type <expression>          condition
 %type <value>               value
 %type <number>              number
 %type <comp>                comp_op
@@ -175,8 +174,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
-%type <condition_list>      where
-%type <condition_list>      condition_list
+%type <expression>          where
 %type<expression_list>      select_attr
 %type <string>              storage_format
 %type <string>              aggregate_type
@@ -193,7 +191,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type<inner_joins>          from_node
 %type<inner_joins_list>     from_list
 %type <expression_list>     group_by
-%type <condition_list>      opt_having
+%type <expression>          opt_having
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
@@ -587,8 +585,7 @@ delete_stmt:    /*  delete 语句的语法解析树*/
       $$ = new ParsedSqlNode(SCF_DELETE);
       $$->deletion.relation_name = $3;
       if ($4 != nullptr) {
-        $$->deletion.conditions.swap(*$4);
-        delete $4;
+        $$->deletion.conditions = $4;
       }
       free($3);
     }
@@ -608,8 +605,7 @@ update_stmt:      /*  update 语句的语法解析树*/
         delete $5;
       }
       if($6 != nullptr) {
-        $$->update.conditions.swap(*$6);
-        delete $6;
+        $$->update.conditions = $6;
       }
       free($2);
       delete $4;
@@ -674,16 +670,15 @@ join_list:
     /* empty */ {
       $$ = nullptr;
     }
-    | INNER JOIN ID ON condition_list join_list {
+    | INNER JOIN ID ON condition join_list {
       if($6 != nullptr) {
         $$ = $6;
       } else {
         $$ = new InnerJoinSqlNode;
       }
       $$->join_relations.emplace_back($3);
-      $$->conditions.emplace_back(*$5);
+      $$->conditions.emplace_back($5);
       free($3);
-      delete $5;
     }
 
 select_stmt:        /*  select 语句的语法解析树*/
@@ -703,8 +698,7 @@ select_stmt:        /*  select 语句的语法解析树*/
       std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
 
       if ($6 != nullptr) {
-        $$->selection.conditions.swap(*$6);
-        delete $6;
+        $$->selection.conditions = $6;
       }
 
       if ($7 != nullptr) {
@@ -713,8 +707,7 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if($8 != nullptr) {
-        $$->selection.having_conditions.swap(*$8);
-        delete $8;
+        $$->selection.having_conditions = $8;
       }
 
       delete $4;
@@ -798,14 +791,17 @@ expression:
     }
     | aggregate_type LBRACE expression RBRACE {
       $$ = create_aggregate_expression($1, $3, sql_string, &@$);
+      free($1);
     }
     | aggregate_type LBRACE expression COMMA expression_list RBRACE {
       $$ = create_aggregate_expression("MAX", new StarExpr(), sql_string, &@$);
+      free($1);
       delete $3;
       delete $5;
     }
     | aggregate_type LBRACE RBRACE {
       $$ = create_aggregate_expression("MAX", new StarExpr(), sql_string, &@$);
+      free($1);
     }
     | sub_query_expr {
       $$ = $1;
@@ -876,60 +872,44 @@ where:
     {
       $$ = nullptr;
     }
-    | WHERE condition_list {
+    | WHERE condition {
       $$ = $2;  
     }
     ;
-condition_list:
-    /* empty */
-    {
-      $$ = nullptr;
-    }
-    | condition {
-      $$ = new std::vector<ConditionSqlNode>;
-      $$->emplace_back(*$1);
-      delete $1;
-    }
-    | condition AND condition_list {
-      $$ = $3;
-      $$->emplace_back(*$1);
-      delete $1;
-    }
-    ;
+
 condition:
     expression comp_op expression
     {
-      $$ = new ConditionSqlNode;
-      $$->left_expr = $1;
-      $$->right_expr = $3;
-      $$->comp = $2;
+      $$ = new ComparisonExpr($2, $1, $3);
     }
     | expression IS NULL_T
     {
-      $$ = new ConditionSqlNode;
-      $$->left_expr = $1;
-      $$->comp = IS_NULL;
       Value val;
       val.set_null();
-      $$->right_expr = new ValueExpr(val);
+      ValueExpr *value_expr = new ValueExpr(val);
+      $$ = new ComparisonExpr(IS_NULL, $1, value_expr);
     }
     | expression IS NOT NULL_T
     {
-      $$ = new ConditionSqlNode;
-      $$->left_expr = $1;
-      $$->comp = IS_NOT_NULL;
       Value val;
       val.set_null();
-      $$->right_expr = new ValueExpr(val);
+      ValueExpr *value_expr = new ValueExpr(val);
+      $$ = new ComparisonExpr(IS_NULL, $1, value_expr);
     }
     | exists_op expression 
     {
-      $$ = new ConditionSqlNode;
       Value val;
       val.set_null();
-      $$->left_expr = new ValueExpr(val);
-      $$->right_expr = $2;
-      $$->comp = $1;
+      ValueExpr *value_expr = new ValueExpr(val);
+      $$ = new ComparisonExpr($1, value_expr, $2);
+    }
+    | condition AND condition
+    {
+      $$ = new ConjunctionExpr(ConjunctionExpr::Type::AND, $1, $3);
+    }
+    | condition OR condition
+    {
+      $$ = new ConjunctionExpr(ConjunctionExpr::Type::OR, $1, $3);
     }
     ;
 
@@ -967,7 +947,7 @@ opt_having:
     /* empty */ {
       $$ = nullptr;
     }
-    | HAVING condition_list 
+    | HAVING condition 
     {
       $$ = $2;
     }

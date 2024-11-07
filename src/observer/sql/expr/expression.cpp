@@ -115,6 +115,9 @@ RC CastExpr::try_get_value(Value &result) const
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+ComparisonExpr::ComparisonExpr(CompOp comp, Expression *left, Expression *right)
+    : comp_(comp), left_(left), right_(right)
+{}
 
 ComparisonExpr::ComparisonExpr(CompOp comp, unique_ptr<Expression> left, unique_ptr<Expression> right)
     : comp_(comp), left_(std::move(left)), right_(std::move(right))
@@ -336,6 +339,13 @@ RC ComparisonExpr::compare_column(const Column &left, const Column &right, std::
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+ConjunctionExpr::ConjunctionExpr(Type type, Expression *left, Expression *right)
+{
+  conjunction_type_ = type;
+  children_.emplace_back(left);
+  children_.emplace_back(right);
+}
+
 ConjunctionExpr::ConjunctionExpr(Type type, vector<unique_ptr<Expression>> children)
     : conjunction_type_(type), children_(std::move(children))
 {}
@@ -759,11 +769,11 @@ RC FieldExpr::check_field(const std::unordered_map<std::string, Table *> &table_
 
 SubQueryExpr::SubQueryExpr(SelectSqlNode &sql_node)
 {
-  sql_node_ = make_unique<SelectSqlNode>();
-  sql_node_->conditions.swap(sql_node.conditions);
+  sql_node_             = make_unique<SelectSqlNode>();
+  sql_node_->conditions = sql_node.conditions;
   sql_node_->expressions.swap(sql_node.expressions);
   sql_node_->group_by.swap(sql_node.group_by);
-  sql_node_->having_conditions.swap(sql_node.having_conditions);
+  sql_node_->having_conditions = sql_node.having_conditions;
   sql_node_->relations.swap(sql_node.relations);
 }
 

@@ -99,3 +99,19 @@ RC FloatType::to_string(const Value &val, string &result) const
   result = ss.str();
   return RC::SUCCESS;
 }
+
+RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const
+{
+  switch (type) {
+    case AttrType::CHARS: {
+      result.attr_type_ = AttrType::CHARS;
+      result.set_data(val.to_string().c_str(), val.to_string().length());
+    } break;
+    case AttrType::INTS: {
+      result.attr_type_ = AttrType::INTS;
+      result.set_int((int)(val.get_float()));
+    } break;
+    default: return RC::UNIMPLEMENTED;
+  }
+  return RC::SUCCESS;
+}

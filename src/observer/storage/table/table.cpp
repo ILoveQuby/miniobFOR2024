@@ -613,8 +613,14 @@ RC Table::update_record(Record &record, vector<Value> values, vector<FieldMeta> 
           if (!cur_field->nullable())
             return RC::SCHEMA_FIELD_TYPE_MISMATCH;
         } else {
-          if (value.attr_type() != cur_field->type())
-            return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+          if (value.attr_type() != cur_field->type()) {
+            Value cast_value;
+            RC    rc = value.cast_to(value, cur_field->type(), cast_value);
+            if (rc != RC::SUCCESS)
+              return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+            else
+              value = cast_value;
+          }
         }
         if (value.is_null())
           bit_map.set_bit(i);

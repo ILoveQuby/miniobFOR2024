@@ -73,8 +73,11 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
         if (!update_field->nullable())
           return RC::INVALID_ARGUMENT;
       } else {
-        if (val.attr_type() != update_field->type())
-          return RC::INVALID_ARGUMENT;
+        if (val.attr_type() != update_field->type()) {
+          Value result;
+          if (RC rc = val.cast_to(val, update_field->type(), result); rc != RC::SUCCESS)
+            return RC::INVALID_ARGUMENT;
+        }
       }
     } else {
       RC rc = update.values[i]->traverse_check(check_field);

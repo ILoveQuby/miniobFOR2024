@@ -130,7 +130,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_
   vector<unique_ptr<Expression>> filter_conditions;
   if (select_sql.conditions != nullptr) {
     unique_ptr<Expression> condition = select_sql.conditions->deep_copy();
-    RC                     rc        = expression_binder.bind_expression(condition, filter_conditions);
     rc = FilterStmt::create(db, default_table, &table_map, select_sql.conditions, filter_stmt);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");

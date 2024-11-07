@@ -894,7 +894,7 @@ condition:
       Value val;
       val.set_null();
       ValueExpr *value_expr = new ValueExpr(val);
-      $$ = new ComparisonExpr(IS_NULL, $1, value_expr);
+      $$ = new ComparisonExpr(IS_NOT_NULL, $1, value_expr);
     }
     | exists_op expression 
     {

@@ -2783,7 +2783,7 @@ yyreduce:
       Value val;
       val.set_null();
       ValueExpr *value_expr = new ValueExpr(val);
-      (yyval.expression) = new ComparisonExpr(IS_NULL, (yyvsp[-3].expression), value_expr);
+      (yyval.expression) = new ComparisonExpr(IS_NOT_NULL, (yyvsp[-3].expression), value_expr);
     }
 #line 2789 "yacc_sql.cpp"
     break;

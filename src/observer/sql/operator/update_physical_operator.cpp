@@ -81,7 +81,7 @@ RC UpdatePhysicalOperator::open(Trx *trx)
         }
         if (val_count == 0)
           values.set_null();
-        else if (val_count >= 1 && !valid)
+        else if (!valid)
           return RC::INVALID_ARGUMENT;
         sub_query_expr->close();
       } else {

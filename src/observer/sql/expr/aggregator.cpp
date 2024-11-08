@@ -18,7 +18,8 @@ See the Mulan PSL v2 for more details. */
 RC SumAggregator::accumulate(const Value &value)
 {
   if (value_.attr_type() == AttrType::UNDEFINED) {
-    value_ = value;
+    if (!value.is_null())
+      value_ = value;
     return RC::SUCCESS;
   }
   if (!value.is_null())
@@ -38,7 +39,8 @@ RC SumAggregator::evaluate(Value &result)
 RC MaxAggregator::accumulate(const Value &value)
 {
   if (value_.attr_type() == AttrType::UNDEFINED) {
-    value_ = value;
+    if (!value.is_null())
+      value_ = value;
     return RC::SUCCESS;
   }
   if (!value.is_null())
@@ -58,7 +60,8 @@ RC MaxAggregator::evaluate(Value &result)
 RC MinAggregator::accumulate(const Value &value)
 {
   if (value_.attr_type() == AttrType::UNDEFINED) {
-    value_ = value;
+    if (!value.is_null())
+      value_ = value;
     return RC::SUCCESS;
   }
   if (!value.is_null())
@@ -78,9 +81,10 @@ RC MinAggregator::evaluate(Value &result)
 RC AvgAggregator::accumulate(const Value &value)
 {
   if (value_.attr_type() == AttrType::UNDEFINED) {
-    value_ = value;
-    if (!value_.is_null())
+    if (!value.is_null()) {
+      value_ = value;
       cnt_++;
+    }
     return RC::SUCCESS;
   }
   if (!value.is_null()) {

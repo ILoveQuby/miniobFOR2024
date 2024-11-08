@@ -109,7 +109,7 @@ RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const
     } break;
     case AttrType::INTS: {
       result.attr_type_ = AttrType::INTS;
-      result.set_int((int)(val.get_float()));
+      result.set_int((int)(val.get_float() + 0.5));
     } break;
     default: return RC::UNIMPLEMENTED;
   }

@@ -176,6 +176,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <expression>          where
+%type <expression_list>     select_attr
 %type <string>              alias 
 %type <string>              storage_format
 %type <string>              aggregate_type
@@ -705,7 +706,7 @@ join_list:
     ;
 
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM from_node from_list where group_by opt_having
+    SELECT select_attr FROM from_node from_list where group_by opt_having
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -807,16 +808,6 @@ expression:
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
     }
-    | '*' DOT '*' {
-      $$ = new StarExpr("*");
-    }
-    | ID DOT '*' {
-      $$ = new StarExpr($1);
-      free($1);
-    }
-    | '*' {
-      $$ = new StarExpr();
-    }
     | expression value {
       if(!$2->is_minus())
       {
@@ -826,6 +817,13 @@ expression:
       ValueExpr *val = new ValueExpr(*$2);
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::ADD, $1, val, sql_string, &@$);
       delete $2;
+    }
+    | '*' {
+      $$ = new StarExpr();
+    }
+    | ID DOT '*' {
+      $$ = new StarExpr($1);
+      free($1);
     }
     | aggregate_type LBRACE expression RBRACE {
       $$ = create_aggregate_expression($1, $3, sql_string, &@$);
@@ -887,6 +885,17 @@ rel_attr:
       free($3);
     }
     ;
+
+  select_attr:
+      '*' DOT '*' {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+        StarExpr *expr = new StarExpr("*");
+        $$->emplace_back(expr);
+      }
+      | expression_list {
+        $$ = $1;
+      }
+      ;
 
 where:
     /* empty */

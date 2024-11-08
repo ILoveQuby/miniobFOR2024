@@ -105,6 +105,9 @@ RC ExpressionBinder::bind_star_expression(
   if (nullptr == expr) {
     return RC::SUCCESS;
   }
+  if (!is_blank(expr->alias())) {
+    return RC::INVALID_ARGUMENT;
+  }
 
   auto star_expr = static_cast<StarExpr *>(expr.get());
 

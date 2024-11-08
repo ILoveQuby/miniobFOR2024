@@ -22,14 +22,11 @@ See the Mulan PSL v2 for more details. */
 using namespace std;
 using namespace common;
 
-Table *BinderContext::find_table(const char *table_name) const
+Table *BinderContext::find_table(string table_name)
 {
-  auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()); };
-  auto iter = ranges::find_if(query_tables_, pred);
-  if (iter == query_tables_.end()) {
-    return nullptr;
-  }
-  return *iter;
+  if (query_tables_.count(table_name) != 0)
+    return query_tables_[table_name];
+  return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -123,7 +120,14 @@ RC ExpressionBinder::bind_star_expression(
 
     tables_to_wildcard.push_back(table);
   } else {
-    const vector<Table *> &all_tables = context_.query_tables();
+    vector<Table *>        all_tables;
+    unordered_set<Table *> table_set;
+    for (auto &kv : context_.query_tables()) {
+      if (table_set.count(kv.second) != 0)
+        continue;
+      all_tables.emplace_back(kv.second);
+      table_set.insert(kv.second);
+    }
     tables_to_wildcard.insert(tables_to_wildcard.end(), all_tables.begin(), all_tables.end());
   }
 
@@ -161,7 +165,7 @@ RC ExpressionBinder::bind_unbound_field_expression(
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    table = context_.query_tables()[0];
+    table = context_.query_tables().begin()->second;
   } else {
     table = context_.find_table(table_name);
     if (nullptr == table) {
@@ -194,8 +198,8 @@ RC ExpressionBinder::bind_field_expression(
   if (nullptr == field_expr) {
     return RC::SUCCESS;
   }
-
-  auto unbound_field_expr = static_cast<FieldExpr *>(field_expr.get());
+  const char *field_alias_name   = field_expr->alias();
+  auto        unbound_field_expr = static_cast<FieldExpr *>(field_expr.get());
 
   const char *table_name = unbound_field_expr->get_table_name().c_str();
   const char *field_name = unbound_field_expr->get_field_name().c_str();
@@ -207,7 +211,7 @@ RC ExpressionBinder::bind_field_expression(
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    table = context_.query_tables()[0];
+    table = context_.query_tables().begin()->second;
   } else {
     table = context_.find_table(table_name);
     if (nullptr == table) {
@@ -227,11 +231,19 @@ RC ExpressionBinder::bind_field_expression(
 
     Field      field(table, field_meta);
     FieldExpr *field_expr = new FieldExpr(field);
-    if (is_blank(table_name))
-      field_expr->set_name(field_name);
-    else {
-      string name = (string)table_name + '.' + (string)field_name;
-      field_expr->set_name(name);
+    if (is_blank(table_name)) {
+      if (is_blank(field_alias_name))
+        field_expr->set_name(field_name);
+      else
+        field_expr->set_name(field_alias_name);
+    } else {
+      if (is_blank(field_alias_name)) {
+        string name = (string)table_name + '.' + (string)field_name;
+        field_expr->set_name(name);
+      } else {
+        string name = (string)table_name + '.' + (string)field_alias_name;
+        field_expr->set_name(name);
+      }
     }
     bound_expressions.emplace_back(field_expr);
   }

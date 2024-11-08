@@ -109,6 +109,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         EXPLAIN
         STORAGE
         FORMAT
+        AS
         EQ
         LT
         GT
@@ -175,7 +176,8 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <expression>          where
-%type<expression_list>      select_attr
+%type <expression_list>     select_attr
+%type <string>              alias 
 %type <string>              storage_format
 %type <string>              aggregate_type
 %type <boolean>             unique_op
@@ -639,6 +641,18 @@ update_kv:
     }
     ;
 
+alias:
+    /* empty */ {
+      $$ = nullptr;
+    }
+    | ID {
+      $$ = $1;
+    }
+    | AS ID {
+      $$ = $2;
+    }
+    ;
+
 from_list:
     /* empty */ {
       $$ = nullptr;
@@ -652,34 +666,44 @@ from_list:
       $$->emplace_back(*$2);
       delete $2;
     }
+    ;
 
 from_node:
-    ID join_list {
-      if($2 != nullptr) {
-        $$ = $2;
+    ID alias join_list {
+      if($3 != nullptr) {
+        $$ = $3;
       } else {
         $$ = new InnerJoinSqlNode;
       }
-      $$->base_relation = $1;
+      $$->base_relation.first = $1;
+      $$->base_relation.second = $2 == nullptr ? "" : std::string($2);
       std::reverse($$->join_relations.begin(), $$->join_relations.end());
       std::reverse($$->conditions.begin(), $$->conditions.end());
       free($1);
+      free($2);
     }
+    ;
 
 join_list:
     /* empty */ {
       $$ = nullptr;
     }
-    | INNER JOIN ID ON condition join_list {
-      if($6 != nullptr) {
-        $$ = $6;
+    | INNER JOIN ID alias ON condition join_list {
+      if($7 != nullptr) {
+        $$ = $7;
       } else {
         $$ = new InnerJoinSqlNode;
       }
-      $$->join_relations.emplace_back($3);
-      $$->conditions.emplace_back($5);
+      std::string tmp = "";
+      if($4 != nullptr) {
+        tmp = $4;
+      }
+      $$->join_relations.emplace_back($3, tmp);
+      $$->conditions.emplace_back($6);
       free($3);
+      free($4);
     }
+    ;
 
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT select_attr FROM from_node from_list where group_by opt_having
@@ -723,19 +747,27 @@ calc_stmt:
     ;
 
 expression_list:
-    expression
+    expression alias
     {
       $$ = new std::vector<std::unique_ptr<Expression>>;
+      if($2 != nullptr) {
+        $1->set_alias($2);
+      }
       $$->emplace_back($1);
+      free($2);
     }
-    | expression COMMA expression_list
+    | expression alias COMMA expression_list
     {
-      if ($3 != nullptr) {
-        $$ = $3;
+      if ($4 != nullptr) {
+        $$ = $4;
       } else {
         $$ = new std::vector<std::unique_ptr<Expression>>;
       }
+      if($2 != nullptr) {
+        $1->set_alias($2);
+      }
       $$->emplace($$->begin(), $1);
+      free($2);
     }
     ;
 expression:

@@ -87,6 +87,7 @@ public:
 
 private:
   static RC process_from_clause(Db *db, std::vector<Table *> &tables,
+      std::unordered_map<std::string, std::string> &table_alias_map,
       std::unordered_map<std::string, Table *> &table_map, std::vector<InnerJoinSqlNode> &from_relations,
       std::vector<JoinTables> &join_tables, BinderContext &binder_context);
 

@@ -34,38 +34,51 @@ SelectStmt::~SelectStmt()
   }
 }
 
-RC SelectStmt::process_from_clause(Db *db, vector<Table *> &tables, unordered_map<string, Table *> &table_map,
-    vector<InnerJoinSqlNode> &from_relations, vector<JoinTables> &join_tables, BinderContext &binder_context)
+RC SelectStmt::process_from_clause(Db *db, vector<Table *> &tables, unordered_map<string, string> &table_alias_map,
+    unordered_map<string, Table *> &table_map, vector<InnerJoinSqlNode> &from_relations,
+    vector<JoinTables> &join_tables, BinderContext &binder_context)
 {
-  auto check_tables = [&](const char *table_name) {
-    if (table_name == nullptr) {
+  unordered_set<string> table_alias_set;
+  auto                  check_tables = [&](pair<string, string> table_name_pair) {
+    string table_name = table_name_pair.first;
+    string alias_name = table_name_pair.second;
+    if (table_name.empty()) {
       LOG_WARN("invalid argument, relation name is null.");
       return RC::INVALID_ARGUMENT;
     }
-    Table *table = db->find_table(table_name);
+    Table *table = db->find_table(table_name.c_str());
     if (table == nullptr) {
       LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
-    binder_context.add_table(table);
+    binder_context.add_table(table_name, table);
     tables.emplace_back(table);
     table_map.insert({table_name, table});
+    if (!alias_name.empty()) {
+      if (table_alias_set.count(alias_name) != 0) {
+        return RC::INVALID_ARGUMENT;
+      }
+      binder_context.add_table(alias_name, table);
+      table_alias_set.insert(alias_name);
+      table_alias_map.insert({table_name, alias_name});
+      table_map.insert({alias_name, table});
+    }
     return RC::SUCCESS;
   };
-  auto process_one_relation = [&](const string &relation, JoinTables &jt, Expression *condition) {
+  auto process_one_relation = [&](const pair<string, string> &relation, JoinTables &jt, Expression *condition) {
     RC rc = RC::SUCCESS;
-    rc    = check_tables(relation.c_str());
+    rc    = check_tables(relation);
     if (rc != RC::SUCCESS) {
       return rc;
     }
     FilterStmt *filter_stmt = nullptr;
     if (condition != nullptr) {
-      rc = FilterStmt::create(db, table_map[relation], &table_map, condition, filter_stmt);
+      rc = FilterStmt::create(db, table_map[relation.first], &table_map, condition, filter_stmt);
       if (rc != RC::SUCCESS) {
         return rc;
       }
     }
-    jt.push(table_map[relation], filter_stmt);
+    jt.push(table_map[relation.first], filter_stmt);
     return rc;
   };
   for (size_t i = 0; i < from_relations.size(); i++) {
@@ -75,8 +88,8 @@ RC SelectStmt::process_from_clause(Db *db, vector<Table *> &tables, unordered_ma
     if (rc != RC::SUCCESS) {
       return rc;
     }
-    vector<string>       &join_relations = relations.join_relations;
-    vector<Expression *> &conditions     = relations.conditions;
+    vector<pair<string, string>> &join_relations = relations.join_relations;
+    vector<Expression *>         &conditions     = relations.conditions;
     for (size_t j = 0; j < join_relations.size(); j++) {
       rc = process_one_relation(join_relations[j], jt, conditions[j]);
       if (rc != RC::SUCCESS) {
@@ -97,10 +110,12 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_
   }
   BinderContext                  binder_context;
   vector<Table *>                tables;
+  unordered_map<string, string>  table_alias_map;
   unordered_map<string, Table *> table_map = parent_table_map;
   vector<JoinTables>             join_tables;
 
-  RC rc = process_from_clause(db, tables, table_map, select_sql.relations, join_tables, binder_context);
+  RC rc =
+      process_from_clause(db, tables, table_alias_map, table_map, select_sql.relations, join_tables, binder_context);
   if (rc != RC::SUCCESS) {
     return rc;
   }

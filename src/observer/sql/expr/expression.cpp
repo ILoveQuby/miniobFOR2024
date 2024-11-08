@@ -764,6 +764,18 @@ RC FieldExpr::check_field(const std::unordered_map<std::string, Table *> &table_
   } else {
     set_name(table_name_ + "." + field_name_);
   }
+  if (alias() != nullptr) {
+    if (is_single_table) {
+      set_alias(field_name_);
+    } else {
+      auto iter = table_alias_map.find(table_name_);
+      if (iter != table_alias_map.end()) {
+        set_alias(iter->second + "." + field_name_);
+      } else {
+        set_alias(table_name_ + "." + field_name_);
+      }
+    }
+  }
   return RC::SUCCESS;
 }
 

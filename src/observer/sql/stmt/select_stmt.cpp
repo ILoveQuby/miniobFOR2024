@@ -51,14 +51,15 @@ RC SelectStmt::process_from_clause(Db *db, vector<Table *> &tables, unordered_ma
       LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
-    binder_context.add_table(table_name, table);
+    binder_context.add_table(table);
+    binder_context.add_table_pair(table_name, table);
     tables.emplace_back(table);
     table_map.insert({table_name, table});
     if (!alias_name.empty()) {
       if (table_alias_set.count(alias_name) != 0) {
         return RC::INVALID_ARGUMENT;
       }
-      binder_context.add_table(alias_name, table);
+      binder_context.add_table_pair(alias_name, table);
       table_alias_set.insert(alias_name);
       table_alias_map.insert({table_name, alias_name});
       table_map.insert({alias_name, table});

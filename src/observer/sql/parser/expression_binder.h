@@ -24,11 +24,9 @@ public:
   BinderContext()          = default;
   virtual ~BinderContext() = default;
 
-  void add_table(string name, Table *table)
-  {
-    query_tables_.insert({name, table});
-    tables_.push_back(table);
-  }
+  void add_table_pair(string name, Table *table) { query_tables_.insert({name, table}); }
+
+  void add_table(Table *table) { tables_.push_back(table); };
 
   Table *find_table(string table_name);
 

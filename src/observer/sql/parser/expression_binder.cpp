@@ -199,7 +199,10 @@ RC ExpressionBinder::bind_field_expression(
 
   Table *table = nullptr;
   if (is_blank(table_name)) {
-    if (context_.query_tables().size() != 1) {
+    unordered_set<Table *> table_set;
+    for (auto &table_pair : context_.query_tables())
+      table_set.insert(table_pair.second);
+    if (table_set.size() != 1) {
       LOG_INFO("cannot determine table for field: %s", field_name);
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }

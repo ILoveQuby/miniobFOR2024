@@ -120,14 +120,7 @@ RC ExpressionBinder::bind_star_expression(
 
     tables_to_wildcard.push_back(table);
   } else {
-    vector<Table *>        all_tables;
-    unordered_set<Table *> table_set;
-    for (auto &kv : context_.query_tables()) {
-      if (table_set.count(kv.second) != 0)
-        continue;
-      all_tables.emplace_back(kv.second);
-      table_set.insert(kv.second);
-    }
+    const vector<Table *> &all_tables = context_.tables();
     tables_to_wildcard.insert(tables_to_wildcard.end(), all_tables.begin(), all_tables.end());
   }
 
@@ -231,19 +224,15 @@ RC ExpressionBinder::bind_field_expression(
 
     Field      field(table, field_meta);
     FieldExpr *field_expr = new FieldExpr(field);
-    if (is_blank(table_name)) {
-      if (is_blank(field_alias_name))
+    if (is_blank(field_alias_name)) {
+      if (is_blank(table_name)) {
         field_expr->set_name(field_name);
-      else
-        field_expr->set_name(field_alias_name);
-    } else {
-      if (is_blank(field_alias_name)) {
+      } else {
         string name = (string)table_name + '.' + (string)field_name;
         field_expr->set_name(name);
-      } else {
-        string name = (string)table_name + '.' + (string)field_alias_name;
-        field_expr->set_name(name);
       }
+    } else {
+      field_expr->set_name(field_alias_name);
     }
     bound_expressions.emplace_back(field_expr);
   }

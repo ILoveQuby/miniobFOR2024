@@ -97,6 +97,8 @@ public:
    */
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const = 0;
 
+  virtual RC find_cell(const TupleCellSpec &spec, Value &cell, int &index) const = 0;
+
   virtual std::string to_string() const
   {
     std::string str;
@@ -240,6 +242,25 @@ public:
     return RC::NOTFOUND;
   }
 
+  RC find_cell(const TupleCellSpec &spec, Value &cell, int &index) const override
+  {
+    const char *table_name = spec.table_name();
+    const char *field_name = spec.field_name();
+    if (0 != strcmp(table_name, table_->name())) {
+      return RC::NOTFOUND;
+    }
+
+    for (size_t i = 0; i < speces_.size(); ++i) {
+      const FieldExpr *field_expr = speces_[i];
+      const Field     &field      = field_expr->field();
+      if (0 == strcmp(field_name, field.field_name())) {
+        index = i;
+        return cell_at(i, cell);
+      }
+    }
+    return RC::NOTFOUND;
+  }
+
 #if 0
   RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
   {
@@ -307,6 +328,11 @@ public:
 
   RC find_cell(const TupleCellSpec &spec, Value &cell) const override { return tuple_->find_cell(spec, cell); }
 
+  RC find_cell(const TupleCellSpec &spec, Value &cell, int &index) const override
+  {
+    return tuple_->find_cell(spec, cell, index);
+  }
+
 #if 0
   RC cell_spec_at(int index, const TupleCellSpec *&spec) const override
   {
@@ -366,6 +392,21 @@ public:
     for (int i = 0; i < size; i++) {
       if (specs_[i].equals(spec)) {
         cell = cells_[i];
+        return RC::SUCCESS;
+      }
+    }
+    return RC::NOTFOUND;
+  }
+
+  virtual RC find_cell(const TupleCellSpec &spec, Value &cell, int &index) const override
+  {
+    ASSERT(cells_.size() == specs_.size(), "cells_.size()=%d, specs_.size()=%d", cells_.size(), specs_.size());
+
+    const int size = static_cast<int>(specs_.size());
+    for (int i = 0; i < size; i++) {
+      if (specs_[i].equals(spec)) {
+        cell  = cells_[i];
+        index = i;
         return RC::SUCCESS;
       }
     }
@@ -456,6 +497,22 @@ public:
     return RC::NOTFOUND;
   }
 
+  RC find_cell(const TupleCellSpec &spec, Value &value, int &index) const override
+  {
+    int num = 0;
+    for (int i = 0; i < child_.size(); i++) {
+      RC rc = child_[i]->find_cell(spec, value);
+      if (rc == RC::SUCCESS) {
+        index += num;
+      }
+      num += child_[i]->cell_num();
+      if (rc == RC::SUCCESS || rc != RC::NOTFOUND) {
+        return rc;
+      }
+    }
+    return RC::NOTFOUND;
+  }
+
 private:
   vector<Tuple *> child_;
 };
@@ -514,6 +571,34 @@ public:
       } else if (exprs_[i]->type() == ExprType::UNBOUND_AGGREGATION || exprs_[i]->type() == ExprType::AGGREGATION) {
         if (strcmp(spec.alias(), exprs_[i]->name()) == 0) {
           cell = (*cells_)[i];
+          return RC::SUCCESS;
+        }
+      } else {
+        LOG_WARN("find cell in SplicedTuple error!");
+        return RC::INTERNAL;
+      }
+    }
+    LOG_WARN(" not find cell in SplicedTuple ");
+    return RC::NOTFOUND;
+  }
+
+  RC find_cell(const TupleCellSpec &spec, Value &cell, int &index) const override
+  {
+    // 先从字段表达式里面找
+    for (size_t i = 0; i < exprs_.size(); ++i) {
+      if (exprs_[i]->type() == ExprType::FIELD) {
+        const FieldExpr *expr = static_cast<FieldExpr *>(exprs_[i].get());
+        if (std::string(expr->field_name()) == std::string(spec.field_name()) &&
+            std::string(expr->table_name()) == std::string(spec.table_name())) {
+          cell  = (*cells_)[i];
+          index = i;
+          LOG_INFO("Field is found in field_exprs");
+          return RC::SUCCESS;
+        }
+      } else if (exprs_[i]->type() == ExprType::UNBOUND_AGGREGATION || exprs_[i]->type() == ExprType::AGGREGATION) {
+        if (strcmp(spec.alias(), exprs_[i]->name()) == 0) {
+          cell  = (*cells_)[i];
+          index = i;
           return RC::SUCCESS;
         }
       } else {

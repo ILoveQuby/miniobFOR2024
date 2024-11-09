@@ -236,6 +236,9 @@ private:
   Field       field_;
   std::string table_name_;
   std::string field_name_;
+
+  bool is_first_ = true;
+  int  index_    = -1;
 };
 
 /**

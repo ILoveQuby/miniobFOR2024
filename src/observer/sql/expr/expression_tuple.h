@@ -73,6 +73,27 @@ public:
     return rc;
   }
 
+  RC find_cell(const TupleCellSpec &spec, Value &cell, int &index) const override
+  {
+    RC rc = RC::SUCCESS;
+    if (child_tuple_ != nullptr) {
+      rc = child_tuple_->find_cell(spec, cell, index);
+      if (OB_SUCC(rc)) {
+        return rc;
+      }
+    }
+
+    rc = RC::NOTFOUND;
+    for (const ExprPointerType &expression : expressions_) {
+      if (0 == strcmp(spec.alias(), expression->name())) {
+        rc = get_value(expression, cell);
+        break;
+      }
+    }
+
+    return rc;
+  }
+
 private:
   RC get_value(const ExprPointerType &expression, Value &value) const
   {

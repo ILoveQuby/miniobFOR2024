@@ -27,6 +27,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
 #include "sql/operator/update_logical_operator.h"
+#include "sql/operator/orderby_logical_operator.h"
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/delete_stmt.h"
 #include "sql/stmt/explain_stmt.h"
@@ -34,6 +35,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/insert_stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/stmt/update_stmt.h"
+#include "sql/stmt/orderby_stmt.h"
 #include "sql/stmt/stmt.h"
 
 #include "sql/expr/expression_iterator.h"
@@ -80,6 +82,12 @@ RC LogicalPlanGenerator::create(Stmt *stmt, unique_ptr<LogicalOperator> &logical
 
       rc = create_plan(update_stmt, logical_operator);
     } break;
+
+    case StmtType::ORDERBY: {
+      OrderByStmt *orderby_stmt = static_cast<OrderByStmt *>(stmt);
+
+      rc = create_plan(orderby_stmt, logical_operator);
+    }
     default: {
       rc = RC::UNIMPLEMENTED;
     }
@@ -182,6 +190,21 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     if (predicate_oper) {
       predicate_oper->add_child(std::move(top_oper));
       top_oper = std::move(predicate_oper);
+    }
+  }
+
+  if (select_stmt->orderby_stmt()) {
+    unique_ptr<LogicalOperator> orderby_oper;
+    RC                          rc = create_plan(select_stmt->orderby_stmt(), orderby_oper);
+
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create order by logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    if (orderby_oper) {
+      orderby_oper->add_child(std::move(top_oper));
+      top_oper = std::move(orderby_oper);
     }
   }
 
@@ -386,13 +409,27 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   return rc;
 }
 
+RC LogicalPlanGenerator::create_plan(OrderByStmt *orderby_stmt, unique_ptr<LogicalOperator> &logical_operator)
+{
+  if (orderby_stmt == nullptr) {
+    logical_operator = nullptr;
+    return RC::SUCCESS;
+  }
+
+  unique_ptr<LogicalOperator> orderby_oper(
+      new OrderByLogicalOperator(std::move(orderby_stmt->get_orderby_units()), std::move(orderby_stmt->get_exprs())));
+  logical_operator = std::move(orderby_oper);
+  return RC::SUCCESS;
+}
+
 RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   vector<unique_ptr<Expression>>             &group_by_expressions = select_stmt->group_by();
   vector<Expression *>                        aggregate_expressions;
-  vector<unique_ptr<Expression>>             &query_expressions  = select_stmt->query_expressions();
-  vector<unique_ptr<Expression>>             &having_expressions = select_stmt->having_expressions();
-  function<RC(std::unique_ptr<Expression> &)> collector          = [&](unique_ptr<Expression> &expr) -> RC {
+  vector<unique_ptr<Expression>>             &query_expressions   = select_stmt->query_expressions();
+  vector<unique_ptr<Expression>>             &having_expressions  = select_stmt->having_expressions();
+  vector<unique_ptr<Expression>>             &orderby_expressions = select_stmt->orderby_expressions();
+  function<RC(std::unique_ptr<Expression> &)> collector           = [&](unique_ptr<Expression> &expr) -> RC {
     RC rc = RC::SUCCESS;
     if (expr->type() == ExprType::AGGREGATION) {
       expr->set_pos(aggregate_expressions.size() + group_by_expressions.size());
@@ -441,6 +478,10 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
     bind_group_by_expr(expression);
   }
 
+  for (unique_ptr<Expression> &expression : orderby_expressions) {
+    bind_group_by_expr(expression);
+  }
+
   for (unique_ptr<Expression> &expression : query_expressions) {
     find_unbound_column(expression);
   }
@@ -449,13 +490,17 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
     find_unbound_column(expression);
   }
 
+  for (unique_ptr<Expression> &expression : orderby_expressions) {
+    find_unbound_column(expression);
+  }
+
   // collect all aggregate expressions
   for (unique_ptr<Expression> &expression : query_expressions) {
     collector(expression);
   }
 
-  for (unique_ptr<Expression> &Expression : having_expressions) {
-    collector(Expression);
+  for (unique_ptr<Expression> &expression : having_expressions) {
+    collector(expression);
   }
 
   if (group_by_expressions.empty() && aggregate_expressions.empty()) {

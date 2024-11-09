@@ -90,6 +90,12 @@ enum CompOp
 //   Expression *right_expr;
 // };
 
+struct OrderBySqlNode
+{
+  Expression *expr = nullptr;
+  bool        is_asc;
+};
+
 struct InnerJoinSqlNode
 {
   std::pair<std::string, std::string>              base_relation;
@@ -115,6 +121,7 @@ struct SelectSqlNode
   Expression                              *conditions = nullptr;  ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;              ///< group by clause
   Expression                              *having_conditions = nullptr;
+  std::vector<OrderBySqlNode>              order_by;
 };
 
 /**

@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/orderby_stmt.h"
 #include "sql/parser/expression_binder.h"
 
 class FieldMeta;
@@ -80,9 +81,11 @@ public:
   const std::vector<JoinTables> &join_tables() const { return join_tables_; }
   FilterStmt                    *filter_stmt() const { return filter_stmt_; }
   FilterStmt                    *having_stmt() const { return having_stmt_; }
+  OrderByStmt                   *orderby_stmt() const { return orderby_stmt_; }
 
   std::vector<std::unique_ptr<Expression>> &query_expressions() { return query_expressions_; }
   std::vector<std::unique_ptr<Expression>> &having_expressions() { return having_expressions_; }
+  std::vector<std::unique_ptr<Expression>> &orderby_expressions() { return orderby_expressions_; }
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
 
 private:
@@ -94,8 +97,10 @@ private:
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
   std::vector<std::unique_ptr<Expression>> having_expressions_;
+  std::vector<std::unique_ptr<Expression>> orderby_expressions_;
   std::vector<JoinTables>                  join_tables_;
   FilterStmt                              *filter_stmt_ = nullptr;
   std::vector<std::unique_ptr<Expression>> group_by_;
-  FilterStmt                              *having_stmt_ = nullptr;
+  OrderByStmt                             *orderby_stmt_ = nullptr;
+  FilterStmt                              *having_stmt_  = nullptr;
 };

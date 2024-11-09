@@ -110,7 +110,21 @@ public:
 
   string to_string() const;
 
-  int compare(const Value &other) const;
+  int  compare(const Value &other) const;
+  bool operator<(const Value &other) { return compare(other) < 0; }
+  bool operator>(const Value &other) { return compare(other) > 0; }
+
+  bool operator==(const Value &other) const { return 0 == compare(other); }
+
+  bool operator!=(const Value &other) const { return 0 != compare(other); }
+
+  bool operator<(const Value &other) const { return compare(other) < 0; }
+
+  bool operator<=(const Value &other) const { return compare(other) <= 0; }
+
+  bool operator>(const Value &other) const { return compare(other) > 0; }
+
+  bool operator>=(const Value &other) const { return compare(other) >= 0; }
 
   int compare_like(const Value &other) const;
 

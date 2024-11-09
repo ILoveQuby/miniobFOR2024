@@ -32,6 +32,10 @@ SelectStmt::~SelectStmt()
     delete having_stmt_;
     having_stmt_ = nullptr;
   }
+  if (nullptr != orderby_stmt_) {
+    delete orderby_stmt_;
+    orderby_stmt_ = nullptr;
+  }
 }
 
 RC SelectStmt::process_from_clause(Db *db, vector<Table *> &tables, unordered_map<string, string> &table_alias_map,
@@ -158,6 +162,10 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_
   if (select_sql.having_conditions != nullptr) {
     unique_ptr<Expression> condition = select_sql.having_conditions->deep_copy();
     RC                     rc        = expression_binder.bind_expression(condition, having_conditions);
+    if (OB_FAIL(rc)) {
+      LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+      return rc;
+    }
     rc = FilterStmt::create(db, default_table, &table_map, select_sql.having_conditions, having_stmt);
     if (rc != RC::SUCCESS) {
       LOG_WARN("cannot construct filter stmt");
@@ -165,14 +173,34 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt, unordered_
     }
   }
 
+  OrderByStmt                   *orderby_stmt = nullptr;
+  vector<unique_ptr<Expression>> orderby_expressions;
+  if (select_sql.order_by.size() > 0) {
+    for (OrderBySqlNode &node : select_sql.order_by) {
+      unique_ptr<Expression> orderby_expr = node.expr->deep_copy();
+      RC                     rc           = expression_binder.bind_expression(orderby_expr, orderby_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+    }
+    RC rc = OrderByStmt::create(
+        db, default_table, &table_map, select_sql.order_by, orderby_stmt, std::move(bound_expressions));
+    if (OB_FAIL(rc))
+      return RC::INVALID_ARGUMENT;
+    select_sql.order_by.clear();
+  }
+
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->join_tables_.swap(join_tables);
   select_stmt->query_expressions_.swap(bound_expressions);
   select_stmt->having_expressions_.swap(having_conditions);
+  select_stmt->orderby_expressions_.swap(orderby_expressions);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
-  select_stmt->having_stmt_ = having_stmt;
-  stmt                      = select_stmt;
+  select_stmt->having_stmt_  = having_stmt;
+  select_stmt->orderby_stmt_ = orderby_stmt;
+  stmt                       = select_stmt;
   return RC::SUCCESS;
 }
 // {
